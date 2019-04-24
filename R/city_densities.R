@@ -82,14 +82,14 @@ grid_arrange_shared_legend <- function(plots, legend_plot,
   gl <- c(gl, nrow = nrow, ncol = ncol)
 
   combined <- switch(position,
-                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                     "bottom" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
                                             legend,
                                             ncol = 1,
-                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
-                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            heights = grid::unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
                                            legend,
                                            ncol = 2,
-                                           widths = unit.c(unit(1, "npc") - lwidth, lwidth)))
+                                           widths = grid::unit.c(unit(1, "npc") - lwidth, lwidth)))
   combined
 }
 
@@ -114,7 +114,7 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
     sf::st_buffer(dist = radius)
   ras <- raster::crop(ras1, sf::st_bbox(center %>% sf::st_buffer(radius*0.2))[c(1,3,2,4)]) * 16/100
 
-  mat <- raster::focalWeight(x = ras, d = 500, type = "Gauss")
+  mat <- raster::focalWeight(x = ras, d = smoothing, type = "Gauss")
   rassmooth <- raster::focal(x = ras, w = mat, fun = sum, pad = TRUE, padValue = 30)
   shift=c(200,-200)
 
@@ -202,6 +202,110 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   g +     ggplot2::coord_sf(datum=NA,xlim=c(bbox$xmin,bbox$xmax),ylim=c(bbox$ymin,bbox$ymax))
 }
 
+map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
+                              bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75.00,100.00,200),
+                              year="2015",
+                              remove_lowest=TRUE,lowest_color=NULL,show_density_rings=FALSE) {
+  c <- sf::st_coordinates(location) %>% tibble::as_tibble()
+  proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                        " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+  ghs <- get_GHS_for(NULL,type="250",year=year)
+  circle <- location %>%
+    sf::st_transform(proj4string) %>%
+    sf::st_buffer(dist = radius)
+  circle_p <- location %>%
+    sf::st_transform(proj4string) %>%
+    sf::st_buffer(dist = radius) %>%
+    sf::st_transform(sf::st_crs(ghs))
+
+  ras <- raster::crop(ghs, sf::st_bbox(circle_p %>% sf::st_buffer(radius*0.2))[c(1,3,2,4)]) * 16/100
+
+  mat <- raster::focalWeight(x = ras, d = smoothing, type = "Gauss")
+  rassmooth <- raster::focal(x = ras, w = mat, fun = sum, pad = TRUE, padValue = 30)
+  shift=c(200,-200)
+
+
+  breaks <- c(-Inf,bks,Inf)
+  labels <- labels_and_colors(breaks)
+  upper_labels <- rlang::set_names(names(labels),breaks[-1])
+  lower_labels <- rlang::set_names(names(labels),breaks[-length(breaks)])
+  if (!is.null(lowest_color)) labels[1+remove_lowest]=lowest_color
+
+  contours1 <- tanaka::tanaka_contour(rassmooth, breaks = bks)  %>%
+    dplyr::mutate(label=dplyr::coalesce(as.character(upper_labels[as.character(max)]),
+                                        as.character(lower_labels[as.character(min)]))) %>%
+    dplyr::mutate(f=labels[label],c=NA)
+
+
+  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=shift[1],y=shift[2]), breaks = bks) %>%
+    dplyr::mutate(f="#000000aa",
+                  id=id-0.5,c="black")
+  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=-shift[1]/2,y=-shift[2]/2), breaks = bks) %>%
+    dplyr::mutate(f="#ffffffaa",
+                  id=id-0.6,c="white")
+  contours <- dplyr::bind_rows(
+    contours1,
+    contours2,
+    contours3
+  ) %>%
+    sf::st_sf(crs=st_crs(contours1)) %>%
+    dplyr::mutate(id=factor(id,levels=.data$id %>% sort)) %>%
+    sf::st_transform(proj4string)
+
+  if (remove_lowest) contours <- contours %>% dplyr::filter(max>bks[1])
+
+  mask <- circle %>%
+    sf::st_buffer(2*radius) %>%
+    sf::st_difference(circle)
+
+  small_mask <- circle %>%
+    sf::st_buffer(radius/20)
+
+  bbox <- sf::st_bbox(circle)
+  bbox2 <- sf::st_bbox(circle %>% st_transform(4326))
+
+  tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
+  vector_tiles <- cancensusHelpers::simpleCache(cancensusHelpers::get_vector_tiles(bbox2), tile_cache)
+
+  if (length(vector_tiles$water$features)==0) { # workaround if there is no water nearby
+    water=rmapzen::as_sf(vector_tiles$roads) %>%
+      sf::st_transform(proj4string) %>%
+      dplyr::filter(kind=="xxx")
+  } else {
+    water=rmapzen::as_sf(vector_tiles$water) %>%
+      sf::st_transform(proj4string) %>%
+      lwgeom::st_make_valid()
+  }
+
+  g<-ggplot2::ggplot(contours %>% sf::st_intersection(small_mask)) +
+    ggplot2::geom_sf(data=water  %>% sf::st_intersection(small_mask),fill="lightblue",color=NA) +
+    ggplot2::geom_sf(ggplot2::aes(fill=f,color=c,group=id),show.legend = "none") +
+    ggplot2::geom_sf(data=mask,fill="white",color=NA) +
+    ggplot2::scale_colour_identity() +
+    ggplot2::scale_fill_identity() +
+    ggplot2::theme_void() +
+    ggplot2::labs(title = title) +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+  if (show_density_rings) {
+    density_rings <- lapply(seq(1,floor(radius/5000)),function(r){
+      location %>%
+        sf::st_transform(crs=sf::st_crs(contours)) %>%
+        sf::st_buffer(r*5000) %>%
+        dplyr::mutate(size=1) %>% #ifelse(r %% 5==1,1,0.25)) %>%
+        dplyr::select(size)
+    }) %>%
+      do.call(rbind,.)
+      bind_rows %>%
+      sf::st_sf(crs=proj4string)
+
+    g <- g + ggplot2::geom_sf(data=density_rings, inherit.aes = FALSE,ggplot2::aes(size=size),fill=NA,color="#00000055") +
+      ggplot2::scale_size_identity()
+  }
+
+  g +     ggplot2::coord_sf(datum=NA,xlim=c(bbox$xmin,bbox$xmax),ylim=c(bbox$ymin,bbox$ymax))
+}
+
 
 # example to track down funny plot outline,
 # it appears that the mask does not quite overwrite the underlying plot
@@ -225,9 +329,10 @@ example_of_plot_boundary_issue <- function(){
     ggplot2::theme(plot.title =  ggplot2::element_text(hjust = 0.5))
 }
 
-
+#' City density grid
+#' @export
 plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75.00,100.00,200),
-                       radius_km=25,ncol=3,years="2015",remove_lowest=TRUE,lowest_color=NULL) {
+                       radius_km=25,ncol=3,years="2015",remove_lowest=TRUE,lowest_color=NULL,smoothing=500) {
   caption <- 'Data : European Commission, Joint Research Centre (JRC); Columbia University, CIESIN (2015): GHS population grid, derived from GPW4.'
 
   if ("sf" %in% class(cities)) {
@@ -252,6 +357,7 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
                                                title=paste0(c,", ",y),
                                                radius=radius_km*1000,
                                                bks=bks,year=y,
+                                               smoothing=smoothing,
                                                remove_lowest = remove_lowest,
                                                lowest_color=lowest_color))
   }) %>%
@@ -261,8 +367,8 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
 
   g<-grid_arrange_shared_legend(plots,legend_plot,position="bottom",ncol=ncol,legend_rows = 1)
 
-  grid.arrange(g, bottom=textGrob(caption, gp=gpar(fontsize=6)),
-               top=textGrob(paste0("Population density, ",radius_km,"km radius"), gp=gpar(fontsize=15,font=8)))
+  gridExtra::grid.arrange(g, bottom=grid::textGrob(caption, gp=grid::gpar(fontsize=6)),
+               top=grid::textGrob(paste0("Population density, ",radius_km,"km radius"), gp=grid::gpar(fontsize=15,font=8)))
 }
 
 #' populatin weighted density

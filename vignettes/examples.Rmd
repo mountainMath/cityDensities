@@ -19,6 +19,15 @@ library(tidyverse)
 library(gganimate)
 ```
 
+
+## Hong Kong
+```{r}
+get_city_locations() %>% filter(name=="Hong Kong") %>% top_n(1,pop) %>%
+  plot_facet(.,radius_km=30,ncol=1,
+             bks=c(1,4,50.00, 100.00,250,500,750,1000,1500),smoothing=250) %>%
+  ggplot2::ggsave("~/Desktop/density_series0.png",.,width=12,height=8.5)
+```
+
 ## Dubai
 ```{r}
 get_city_locations() %>% filter(name=="Dubai") %>% top_n(1,pop) %>%
@@ -126,7 +135,7 @@ ggplot(plot_data,aes(x=reorder(name,density),y=density,fill=label)) +
   coord_flip() +
   geom_text(aes(label=round(density),y=density/2,hjust=0)) +
   scale_fill_brewer(palette = "Set1") +
-  labs(title="Population weighted densities, 30km radius, 250m grid",x="",y="People/ha",
+  labs(title="2015 population weighted densities, 30km radius, 250m grid",x="",y="People/ha",
        fill="",caption=ghs_attribution_linebreak)
 ```
 
@@ -134,7 +143,7 @@ ggplot(plot_data,aes(x=reorder(name,density),y=density,fill=label)) +
 ```{r}
 asian_cities <-c("Tokyo","Osaka","Nagoya","Taipei","Kaohsiung","Jakarta","Surabaya","Manila","Ha Noi",
                  "Ho Chi Minh City","Beijing","Shanghai","Chongqing","Hong Kong","Singapore",
-                 "Delhi","Bangalore","Dhaka","Mumbai","Calcutta","Karachi","Lahore","Seoul","Pusan","Pyongyang")
+                 "Delhi","Bangalore","Dhaka","Mumbai","Calcutta","Karachi","Lahore","Seoul","Pusan","Pyongyang","Bangkok")
 
 locations <- get_city_locations() %>% filter(name %in% asian_cities,country.etc!="Venezuela") %>% group_by(name) %>% top_n(1,pop)
 
@@ -154,7 +163,6 @@ plot_data <- data %>%
   mutate(label=factor(label,levels=c(featured_countries,"Other"))) %>%
   mutate(Year=as.integer(as.character(Year))) %>%
   group_by(Year) %>%
-  # The * 1 makes it possible to have non-integer ranks while sliding
   mutate(rank = min_rank(density)*1) %>%
   ungroup() %>%
   mutate(colour=set_names(RColorBrewer::brewer.pal(length(featured_countries)+1,"Set1"),c(featured_countries,"Other"))[as.character(label)])
@@ -184,7 +192,48 @@ p<-ggplot(plot_data,aes(x=rank,y=density,fill=name,label=name)) +
   transition_time(Year) +
   ease_aes('linear')
 
-pp<-animate(p, end_pause = 20,start_pause=20) #again, use anim_save(filename) to save
+pp<-animate(p, end_pause = 20,start_pause=20) 
 #anim_save("~/Desktop/population_weighted_densities.gif",pp)
 ```
 
+
+```{r fig.height=10}
+data <- get_population_weighted_data(locations,years=c("1975","1990","2000","2015"),type="1k")
+
+plot_data <- data %>%
+  mutate(label=ifelse(country.etc %in% featured_countries,as.character(country.etc),"Other")) %>%
+  mutate(label=factor(label,levels=c(featured_countries,"Other"))) %>%
+  mutate(Year=as.integer(as.character(Year))) %>%
+  group_by(Year) %>%
+  mutate(rank = min_rank(density)*1) %>%
+  ungroup() %>%
+  mutate(colour=set_names(RColorBrewer::brewer.pal(length(featured_countries)+1,"Set1"),c(featured_countries,"Other"))[as.character(label)])
+
+colours <- plot_data %>% 
+  dplyr::select(name,country.etc,label,colour) %>% 
+  unique %>%
+  mutate(name=as.character(name),country.etc=as.character(country.etc),labels=as.character(label))
+
+p<-ggplot(plot_data,aes(x=rank,y=density,fill=name,label=name)) +
+  geom_bar(stat="identity") +
+  coord_flip(clip = "off", expand = FALSE) +
+  geom_text(aes(y = 0), hjust = 1,nudge_y = -50) +
+  scale_fill_manual(values=set_names(colours$colour,colours$name),guide=FALSE)+
+  theme_light() +
+  geom_point(shape=NA,aes(color=label)) +
+  scale_colour_manual(values=set_names(colours$colour,colours$label))+
+  guides(color=guide_legend("", override.aes=list(shape=15, size = 10))) +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y  = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.border = element_blank(),
+        plot.margin=unit(c(5.5, 5.5, 5.5, 85.5), "points")) + 
+  labs(title="{frame_time} population weighted densities, 30km radius, 1km grid",x="",y="People/ha",
+       fill="",caption=caption,subtitle="(Interpolated based on 1975, 1990, 2000 and 2015 estimates)") +
+  transition_time(Year) +
+  ease_aes('linear')
+
+pp<-gganimate::animate(p, end_pause = 20,start_pause=20,height=800,width=700) 
+gganimate::anim_save("~/Desktop/density_race_1k.gif",pp)
+```
