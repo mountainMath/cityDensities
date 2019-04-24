@@ -1,0 +1,182 @@
+---
+title: "Vignette Title"
+author: "Vignette Author"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(cityDensities)
+library(tidyverse)
+```
+
+## Dubai
+```{r}
+get_city_locations() %>% filter(name=="Dubai") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series9.png",.,width=12,height=8.5)
+```
+
+## Abu Dhabi
+```{r}
+get_city_locations() %>% filter(name=="Abu Dhabi") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=40) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+## Riyadh
+```{r}
+get_city_locations() %>% filter(name=="Riyadh") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+## Jeddah
+```{r}
+get_city_locations() %>% filter(name=="Jeddah") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+## Kuwait City
+```{r}
+get_city_locations() %>% filter(name=="al-Kuwayt") %>% mutate(name="Kuwait") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+## Mecca
+```{r}
+get_city_locations() %>% filter(name=="Mecca") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=25) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+
+
+## St Louis
+```{r}
+get_city_locations() %>% filter(name=="Saint Louis") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=40) %>%
+  ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
+```
+
+
+```{r}
+cities <-c("Barcelona","Madrid","Valencia","Athens","Paris","Sevilla","Vienna","Sofia","Naples","Turin","Lyon","Brussels","Rome",
+  "Warsaw","Amsterdam","Berlin","London","Lisbon","Prague","Budapest","Munich","Rotterdam","Copenhagen","Milan",
+  "Katowice","Stockholm","Hamburg","Cologne","Dusseldorf","Toronto","Montreal","Frankfurt","Wellington","Dublin","Vancouver",
+  "Liverpool","Birmingham","Porto","Manchester","Stuttgart","Helsinki","Glasgow","Sydney","Ottawa","Calgary","Auckland","Edmonton",
+  "Melbourne","Christchurch","Adelaide","Brisbane","Perth")
+
+locations <- get_city_locations() %>% filter(name %in% cities,country.etc!="Venezuela") %>% group_by(name) %>% top_n(1,pop)
+
+
+data <- cities %>% lapply(function(c){
+  location <- locations %>% filter(name==c)
+  density <- pop_weighted_density_for(location,max_radius_km = 30,year="2015",type="250")
+  location %>% mutate(density=density)
+}) %>% 
+  bind_rows %>% 
+  sf::st_sf()
+
+
+featured_countries <- c(
+  "Spain",
+  "France",
+  "Italy",
+  "Germany",
+  "UK",
+  "Australia",
+  "Canada",
+  "New Zealand")
+
+plot_data <- data %>% 
+  mutate(label=ifelse(country.etc %in% featured_countries,as.character(country.etc),"Other")) %>%
+  mutate(label=factor(label,levels=c(featured_countries,"Other")))
+
+ggplot(plot_data,aes(x=reorder(name,density),y=density,fill=label)) +
+  geom_bar(stat="identity") +
+  coord_flip() +
+  geom_text(aes(label=round(density),y=density/2,hjust=0)) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title="Population weighted densities, 30km radius, 250m grid",x="",y="People/ha",
+       fill="",caption=ghs_attribution_linebreak)
+```
+
+
+```{r}
+asian_cities <-c("Tokyo","Osaka","Nagoya","Taipei","Kaohsiung","Jakarta","Surabaya","Manila","Ha Noi","Ho Chi Minh City","Beijing","Shanghai","Chongqing","Hong Kong","Singapore",
+                 "Delhi","Bangalore","Dhaka","Mumbai","Calcutta","Karachi","Lahore","Seoul","Pusan","Pyongyang")
+
+locations <- get_city_locations() %>% filter(name %in% asian_cities,country.etc!="Venezuela") %>% group_by(name) %>% top_n(1,pop)
+
+data <- c("1975","1990","2000","2015") %>% lapply(function(year){
+  asian_cities %>% lapply(function(c){
+    print(c)
+    location <- locations %>% filter(name==c)
+    density <- pop_weighted_density_for(location,max_radius_km = 30,year=year,type="250")
+    location %>% mutate(density=density)
+  }) %>% 
+    bind_rows %>% 
+    mutate(Year=year) %>%
+    sf::st_sf() 
+}) %>% 
+  bind_rows %>% 
+  sf::st_sf()
+
+
+
+featured_countries <- c(
+  "Vietnam",
+  "China",
+  "Taiwan",
+  "Japan",
+  "India",
+  "Pakistan",
+  "Korea South")
+
+plot_data <- data %>%
+  mutate(label=ifelse(country.etc %in% featured_countries,as.character(country.etc),"Other")) %>%
+  mutate(label=factor(label,levels=c(featured_countries,"Other"))) %>%
+  mutate(Year=as.integer(as.character(Year))) %>%
+  group_by(Year) %>%
+  # The * 1 makes it possible to have non-integer ranks while sliding
+  mutate(rank = min_rank(density)*1) %>%
+  ungroup()
+  
+library(gganimate)
+p<-ggplot(plot_data,aes(x=rank,y=density,fill=label,label=name)) +
+  geom_bar(stat="identity") +
+  coord_flip(clip = "off", expand = FALSE) +
+  #coord_flip() +
+  geom_text(aes(y = 0), hjust = 1,nudge_y = -50) +
+  #geom_text(hjust=-.2,vjust=-.2)+
+  #geom_text(aes(label=round(density),y=density/2,hjust=0)) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_light() +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y  = element_blank(),
+        panel.grid.major.y = element_blank() ,
+        panel.grid.minor.y = element_blank() ,
+        panel.grid.major.x = element_line( size=.1, color="black" ),
+        plot.margin=unit(c(5.5, 5.5, 5.5, 85.5), "points")) + 
+  labs(title="{frame_time} population weighted densities, 30km radius, 250m grid",x="",y="People/ha",
+       fill="",caption=ghs_attribution_linebreak,subtitle="(Interpolated based on 1975, 1990, 2000 and 2015 estimates)") +
+  transition_time(Year) +
+  ease_aes('linear')
+
+anim_save("~/Desktop/population_weighted_densities.gif",p)
+animate(p, nframes = 100, fps = 5, end_pause = 20) #again, use anim_save(filename) to save
+```
+
+
+
