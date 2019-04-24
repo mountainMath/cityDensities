@@ -16,6 +16,7 @@ knitr::opts_chunk$set(
 )
 library(cityDensities)
 library(tidyverse)
+library(gganimate)
 ```
 
 ## Dubai
@@ -77,16 +78,33 @@ cities <-c("Barcelona","Madrid","Valencia","Athens","Paris","Sevilla","Vienna","
   "Liverpool","Birmingham","Porto","Manchester","Stuttgart","Helsinki","Glasgow","Sydney","Ottawa","Calgary","Auckland","Edmonton",
   "Melbourne","Christchurch","Adelaide","Brisbane","Perth")
 
-locations <- get_city_locations() %>% filter(name %in% cities,country.etc!="Venezuela") %>% group_by(name) %>% top_n(1,pop)
+locations <- get_city_locations() %>%
+  filter(name %in% cities,country.etc!="Venezuela") %>% 
+  group_by(name) %>% 
+  top_n(1,pop) %>%
+  ungroup %>%
+  left_join(tibble(name=cities,n=seq(1,length(cities)))) %>%
+  arrange(n)
 
 
-data <- cities %>% lapply(function(c){
-  location <- locations %>% filter(name==c)
-  density <- pop_weighted_density_for(location,max_radius_km = 30,year="2015",type="250")
-  location %>% mutate(density=density)
+get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,type="250"){
+  years %>% lapply(function(year){
+  cities$name %>% lapply(function(c){
+    location <- locations %>% filter(name==c)
+    density <- pop_weighted_density_for(location,max_radius_km = max_radius_km,year=year,type=type)
+    location %>% mutate(density=density)
+  }) %>% 
+    bind_rows %>% 
+    mutate(Year=year) %>%
+    sf::st_sf(crs=4326) 
 }) %>% 
   bind_rows %>% 
-  sf::st_sf()
+  sf::st_sf(crs=4326)
+}
+
+
+
+data <- get_population_weighted_data(locations)
 
 
 featured_countries <- c(
@@ -114,26 +132,13 @@ ggplot(plot_data,aes(x=reorder(name,density),y=density,fill=label)) +
 
 
 ```{r}
-asian_cities <-c("Tokyo","Osaka","Nagoya","Taipei","Kaohsiung","Jakarta","Surabaya","Manila","Ha Noi","Ho Chi Minh City","Beijing","Shanghai","Chongqing","Hong Kong","Singapore",
+asian_cities <-c("Tokyo","Osaka","Nagoya","Taipei","Kaohsiung","Jakarta","Surabaya","Manila","Ha Noi",
+                 "Ho Chi Minh City","Beijing","Shanghai","Chongqing","Hong Kong","Singapore",
                  "Delhi","Bangalore","Dhaka","Mumbai","Calcutta","Karachi","Lahore","Seoul","Pusan","Pyongyang")
 
 locations <- get_city_locations() %>% filter(name %in% asian_cities,country.etc!="Venezuela") %>% group_by(name) %>% top_n(1,pop)
 
-data <- c("1975","1990","2000","2015") %>% lapply(function(year){
-  asian_cities %>% lapply(function(c){
-    print(c)
-    location <- locations %>% filter(name==c)
-    density <- pop_weighted_density_for(location,max_radius_km = 30,year=year,type="250")
-    location %>% mutate(density=density)
-  }) %>% 
-    bind_rows %>% 
-    mutate(Year=year) %>%
-    sf::st_sf() 
-}) %>% 
-  bind_rows %>% 
-  sf::st_sf()
-
-
+data <- get_population_weighted_data(locations,years=c("1975","1990","2000","2015"))
 
 featured_countries <- c(
   "Vietnam",
@@ -151,32 +156,35 @@ plot_data <- data %>%
   group_by(Year) %>%
   # The * 1 makes it possible to have non-integer ranks while sliding
   mutate(rank = min_rank(density)*1) %>%
-  ungroup()
-  
-library(gganimate)
-p<-ggplot(plot_data,aes(x=rank,y=density,fill=label,label=name)) +
+  ungroup() %>%
+  mutate(colour=set_names(RColorBrewer::brewer.pal(length(featured_countries)+1,"Set1"),c(featured_countries,"Other"))[as.character(label)])
+
+colours <- plot_data %>% 
+  select(name,country.etc,label,colour) %>% 
+  unique %>%
+  mutate(name=as.character(name),country.etc=as.character(country.etc),labels=as.character(labels))
+
+p<-ggplot(plot_data,aes(x=rank,y=density,fill=name,label=name)) +
   geom_bar(stat="identity") +
   coord_flip(clip = "off", expand = FALSE) +
-  #coord_flip() +
   geom_text(aes(y = 0), hjust = 1,nudge_y = -50) +
-  #geom_text(hjust=-.2,vjust=-.2)+
-  #geom_text(aes(label=round(density),y=density/2,hjust=0)) +
-  scale_fill_brewer(palette = "Set1") +
+  scale_fill_manual(values=set_names(colours$colour,colours$name),guide=FALSE)+
   theme_light() +
+  geom_point(shape=NA,aes(color=label)) +
+  scale_colour_manual(values=set_names(colours$colour,colours$label))+
+  guides(color=guide_legend("", override.aes=list(shape=15, size = 10))) +
   theme(axis.ticks.y = element_blank(),
         axis.text.y  = element_blank(),
-        panel.grid.major.y = element_blank() ,
-        panel.grid.minor.y = element_blank() ,
-        panel.grid.major.x = element_line( size=.1, color="black" ),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.border = element_blank(),
         plot.margin=unit(c(5.5, 5.5, 5.5, 85.5), "points")) + 
   labs(title="{frame_time} population weighted densities, 30km radius, 250m grid",x="",y="People/ha",
        fill="",caption=ghs_attribution_linebreak,subtitle="(Interpolated based on 1975, 1990, 2000 and 2015 estimates)") +
   transition_time(Year) +
   ease_aes('linear')
 
-anim_save("~/Desktop/population_weighted_densities.gif",p)
-animate(p, nframes = 100, fps = 5, end_pause = 20) #again, use anim_save(filename) to save
+pp<-animate(p, end_pause = 20,start_pause=20) #again, use anim_save(filename) to save
+#anim_save("~/Desktop/population_weighted_densities.gif",pp)
 ```
-
-
 

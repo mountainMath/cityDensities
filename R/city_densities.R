@@ -27,7 +27,7 @@ get_GHS_for<-function(geo=NULL,type=c("250","1k"),year=c("1975","1990","2000","2
 get_city_locations <- function(){
   location<-maps::world.cities %>%
     tibble::as_tibble() %>%
-    dplyr::mutate(name=dplyr::recode(name,"Xianggangdao"="Hong Kong","Soul"="Seoul","Bombay"="Mumbai")) %>%
+    dplyr::mutate(name=dplyr::recode(name,"Xianggangdao"="Hong Kong","Soul"="Seoul","Bombay"="Mumbai","Ha Noi"="Hanoi")) %>%
     sf::st_as_sf(coords = c("long", "lat"), crs = 4326, agr = "constant")
 }
 
@@ -246,7 +246,7 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
 
 
   plots <- purrr::map(city_names,function(c){
-    print(c)
+    #print(c)
     l <- location %>% filter(name==c)
     years %>% purrr::map(function(y)map_plot_for_city(location=l,
                                                title=paste0(c,", ",y),
@@ -425,7 +425,7 @@ plot_density_facet <- function(cities,bks=c(4,10,25,50,100,200,500,1000),
   if (length(d)>0) stop(paste0("Could not find ",paste0(d,collapse = ", "),"."))
 
   plots <- purrr::map(city_names,function(c){
-    print(c)
+    #print(c)
     l <- location %>% filter(name==c)
     years %>% purrr::map(function(y)
       map_plot_for_city(location=l,
