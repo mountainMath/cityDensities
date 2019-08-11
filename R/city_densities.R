@@ -128,23 +128,22 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   contours1 <- tanaka::tanaka_contour(rassmooth, breaks = bks)  %>%
     dplyr::mutate(label=dplyr::coalesce(as.character(upper_labels[as.character(max)]),
                           as.character(lower_labels[as.character(min)]))) %>%
-    dplyr::mutate(f=labels[label],c=NA)
+    dplyr::mutate(f=labels[label],c=NA) %>%
+    select(-label)
 
 
-  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=shift[1],y=shift[2]), breaks = bks) %>%
+  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=shift[1],dy=shift[2]), breaks = bks) %>%
     dplyr::mutate(f="#000000aa",
                   id=id-0.5,c="black")
-  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=-shift[1]/2,y=-shift[2]/2), breaks = bks) %>%
+  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=-shift[1]/2,dy=-shift[2]/2), breaks = bks) %>%
     dplyr::mutate(f="#ffffffaa",
                   id=id-0.6,c="white")
-  contours <- dplyr::bind_rows(
+  contours <- do.call(rbind,list(
     contours1,
     contours2,
     contours3
-  ) %>%
-    sf::st_sf() %>%
-    dplyr::mutate(id=factor(id,levels=.data$id %>% sort)) %>%
-    sf::st_set_crs(proj4string)
+  )) %>%
+    dplyr::mutate(id=factor(id,levels=.data$id %>% sort))
 
   if (remove_lowest) contours <- contours %>% dplyr::filter(max>bks[1])
 
@@ -190,10 +189,8 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
         sf::st_buffer(r*5000) %>%
         dplyr::mutate(size=1) %>% #ifelse(r %% 5==1,1,0.25)) %>%
         dplyr::select(size)
-    }) %>%
-      bind_rows %>%
-      sf::st_sf() %>%
-      sf::st_set_crs(proj4string)
+    }) %>% do.call(rbind,.)
+
 
     g <- g + ggplot2::geom_sf(data=density_rings, inherit.aes = FALSE,ggplot2::aes(size=size),fill=NA,color="#00000055") +
       ggplot2::scale_size_identity()
@@ -571,3 +568,58 @@ plot_density_facet <- function(cities,bks=c(4,10,25,50,100,200,500,1000),
                top=grid::textGrob(paste0(location$name," population density, ",radius_km,"km radius"),
                                   gp=grid::gpar(fontsize=15,font=8)))
 }
+
+#' Get population weighted data for cities and years
+#' @param cities list of cities of class `sf` point geometries and `name` field
+#' @param years list of years, valid values are `1975`, `1990`, `2000`, `2015`
+#' @param max_radius_km radius to compute the densities
+#' @param type 1k or 250 metre grid
+get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,type="250"){
+  years %>% lapply(function(year){
+    cities$name %>% lapply(function(c){
+      location <- locations %>% filter(name==c)
+      density <- pop_weighted_density_for(location,max_radius_km = max_radius_km,year=year,type=type)
+      location %>% mutate(density=density)
+    }) %>%
+      bind_rows %>%
+      mutate(Year=year) %>%
+      sf::st_sf(crs=4326)
+  }) %>%
+    bind_rows %>%
+    sf::st_sf(crs=4326)
+}
+
+#' Returns an animated bar graph
+#' @param data tibble with columns `Value` (the y value for each bar), `name` (the label for each bar), `label` (the colour label for each bar), `colour` the colour for each bar, `Year` (time variable)
+#' @export
+bar_race_animation <- function(data){
+  colours <- data %>%
+    dplyr::select(name,label,colour) %>%
+    unique %>%
+    dplyr::mutate(name=as.character(name),labels=as.character(label))
+
+  p<- data %>%
+    dplyr::group_by(Year) %>%
+    dplyr::mutate(rank = min_rank(Value)*1) %>%
+    dplyr::ungroup() %>%
+    ggplot2::ggplot(ggplot2::aes(x=rank,y=Value,fill=name,label=name)) +
+    ggplot2::geom_bar(stat="identity") +
+    ggplot2::coord_flip(clip = "off", expand = FALSE) +
+    ggplot2::geom_text(ggplot2::aes(y = 0), hjust = 1,nudge_y = -50) +
+    ggplot2::scale_fill_manual(values=set_names(colours$colour,colours$name),guide=FALSE)+
+    ggplot2::theme_light() +
+    ggplot2::geom_point(shape=NA,aes(color=label)) +
+    ggplot2::scale_colour_manual(values=set_names(colours$colour,colours$label))+
+    ggplot2::guides(color=ggplot2::guide_legend("", override.aes=list(shape=15, size = 10))) +
+    ggplot2::theme(axis.ticks.y = ggplot2::element_blank(),
+          axis.text.y  = ggplot2::element_blank(),
+          panel.grid.major.y = ggplot2::element_blank(),
+          panel.grid.minor.y = ggplot2::element_blank(),
+          panel.border = ggplot2::element_blank(),
+          plot.margin=ggplot2::unit(c(5.5, 5.5, 5.5, 85.5), "points")) +
+    ggplot2::labs(x="",y="People/ha",
+         fill="",subtitle="(Interpolated based on 1975, 1990, 2000 and 2015 estimates)") +
+    gganimate::transition_time(Year) +
+    gganimate::ease_aes('linear')
+}
+

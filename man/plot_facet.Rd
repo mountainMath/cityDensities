@@ -6,7 +6,7 @@
 \usage{
 plot_facet(cities, bks = c(1, 2.5, 5, 7.5, 10, 17.5, 25, 50, 75, 100,
   200), radius_km = 25, ncol = 3, years = "2015",
-  remove_lowest = TRUE, lowest_color = NULL)
+  remove_lowest = TRUE, lowest_color = NULL, smoothing = 500)
 }
 \description{
 City density grid

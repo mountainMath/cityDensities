@@ -79,6 +79,27 @@ get_city_locations() %>% filter(name=="Saint Louis") %>% top_n(1,pop) %>%
   ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
 ```
 
+## San Diego
+```{r}
+get_city_locations() %>% filter(name=="San Diego") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=30) %>%
+  ggplot2::ggsave("~/Desktop/density_series11.png",.,width=12,height=8.5)
+```
+
+## Manila
+```{r}
+get_city_locations() %>% filter(name=="Manila") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series13.png",.,width=12,height=8.5)
+```
+
+## El Paso
+```{r}
+get_city_locations() %>% filter(name=="El Paso") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=30) %>%
+  ggplot2::ggsave("~/Desktop/density_series12.png",.,width=12,height=8.5)
+```
+
 
 ```{r}
 cities <-c("Barcelona","Madrid","Valencia","Athens","Paris","Sevilla","Vienna","Sofia","Naples","Turin","Lyon","Brussels","Rome",
@@ -94,22 +115,6 @@ locations <- get_city_locations() %>%
   ungroup %>%
   left_join(tibble(name=cities,n=seq(1,length(cities)))) %>%
   arrange(n)
-
-
-get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,type="250"){
-  years %>% lapply(function(year){
-  cities$name %>% lapply(function(c){
-    location <- locations %>% filter(name==c)
-    density <- pop_weighted_density_for(location,max_radius_km = max_radius_km,year=year,type=type)
-    location %>% mutate(density=density)
-  }) %>% 
-    bind_rows %>% 
-    mutate(Year=year) %>%
-    sf::st_sf(crs=4326) 
-}) %>% 
-  bind_rows %>% 
-  sf::st_sf(crs=4326)
-}
 
 
 
@@ -197,6 +202,25 @@ pp<-animate(p, end_pause = 20,start_pause=20)
 ```
 
 
+
+
+```{r}
+data <- get_population_weighted_data(locations,years=c("1975","1990","2000","2015"),type="1k")
+
+plot_data <-   data %>%
+  mutate(label=ifelse(country.etc %in% featured_countries,as.character(country.etc),"Other")) %>%
+  mutate(label=factor(label,levels=c(featured_countries,"Other"))) %>%
+  mutate(colour=set_names(RColorBrewer::brewer.pal(length(featured_countries)+1,"Set1"),c(featured_countries,"Other"))[as.character(label)]) %>%
+  rename(Value=density) %>%
+  mutate(Year=as.integer(as.character(Year)))
+
+
+
+gganimate::animate(bar_race_animation(plot_data), end_pause = 20,start_pause=20,height=800,width=700) 
+```
+
+
+
 ```{r fig.height=10}
 data <- get_population_weighted_data(locations,years=c("1975","1990","2000","2015"),type="1k")
 
@@ -236,4 +260,30 @@ p<-ggplot(plot_data,aes(x=rank,y=density,fill=name,label=name)) +
 
 pp<-gganimate::animate(p, end_pause = 20,start_pause=20,height=800,width=700) 
 gganimate::anim_save("~/Desktop/density_race_1k.gif",pp)
+```
+
+
+
+```{r}
+
+cities <- c("Seattle","Toronto","Vancouver","San Francisco","New York",
+            "Chicago","Atlanta","London","Paris","Vienna","Athens","Barcelona","Taipei","Hong Kong","Singapore")
+locations <- get_city_locations() %>% filter(name %in% cities) %>% group_by(name) %>% top_n(1,pop)
+
+data <- get_population_weighted_data(locations,years=c("1975","1990","2000","2015"),max_radius_km = 25,type="1k")
+
+plot_data <-   data %>%
+  mutate(label=case_when(name %in% c("New York","Chicago","Atlanta","Seattle","Toronto","Vancouver","San Francisco") ~ "North America",
+                         name %in% c("London","Paris","Vienna","Athens","Barcelona") ~ "Europe",
+                         name %in% c("Taipei","Hong Kong","Singapore") ~ "Asia",
+                         TRUE ~ "Other")) %>%
+  mutate(label=factor(label)) %>%
+  mutate(colour=set_names(RColorBrewer::brewer.pal(length((.)$label %>% unique),"Set1"),(.)$label %>% unique)[as.character(label)]) %>%
+  rename(Value=density) %>%
+  mutate(Year=as.integer(as.character(Year)))
+
+plot <- bar_race_animation(plot_data) +
+  labs(title="{frame_time} population weighted densities, 25km radius, 1km grid",caption=ghs_attribution_linebreak)
+
+gganimate::animate(plot, end_pause = 20,start_pause=20,height=800,width=700) 
 ```
