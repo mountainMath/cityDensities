@@ -1,9 +1,14 @@
-get_GHS_for<-function(geo=NULL,type=c("250","1k"),year=c("1975","1990","2000","2015")){
-  buffer <- ifelse(type=="1k",500,125)
-  raster_path = paste0(getOption("custom_data_path"),"GHS/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",type,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",type,"_v1_0.tif")
+#' Get GHS populatin data
+#' @param geo cut down to geography (will include data in buffer around geography)
+#' @param resolution resolution
+#' @param year year for the data series
+#' @export
+get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),year=c("1975","1990","2000","2015")){
+  buffer <- ifelse(resolution=="1k",500,125)
+  raster_path = paste0(getOption("custom_data_path"),"GHS/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.tif")
   if (!file.exists(raster_path)) {
     temp=tempfile()
-    download.file(paste0("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GPW4_GLOBE_R2015A/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",type,"/V1-0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",type,"_v1_0.zip"),temp)
+    download.file(paste0("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GPW4_GLOBE_R2015A/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"/V1-0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.zip"),temp)
     exdir=file.path(getOption("custom_data_path"),"GHS")
     if (!dir.exists(exdir)) dir.create(exdir)
     zip::unzip(temp,exdir = exdir)
@@ -22,6 +27,42 @@ get_GHS_for<-function(geo=NULL,type=c("250","1k"),year=c("1975","1990","2000","2
   #rr %>% projectRaster(crs=wgs_poj4)
   rr
 }
+
+#' Get GHS land use data
+#' @param geo cut down to geography (will include data in buffer around geography)
+#' @param resolution resolution
+#' @param year year for the data series
+#' @param crs for the geotiff, options are 54009 (Mollweide) and 3857 (Web Mercator)
+#' @export
+get_GHS_built_data<-function(geo=NULL,resolution=c("30","250","1K"),year=c("1975","1990","2000","2014"),crs="54009"){
+  buffer <- ifelse(resolution=="1K",500,125)
+  crs="54009"
+  core <-paste0("GHS_BUILT_LDS",year,"_GLOBE_R2018A_",crs,"_",resolution)
+  file <- paste0(core,"_V2_0")
+  url <- paste0("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/",core,"/V2-0/",file,".zip")
+  raster_path = paste0(getOption("custom_data_path"),"/GHS/GHS_BUILT/",file,".tif")
+  if (!file.exists(raster_path)) {
+    temp=tempfile()
+    download.file(url,temp)
+    exdir=file.path(getOption("custom_data_path"),"GHS/GHS_BUILT")
+    if (!dir.exists(exdir)) dir.create(exdir)
+    zip::unzip(temp,exdir = exdir)
+    if (!file.exists(raster_path))
+      stop("Downloading of raster file failed, probably needs some tweaking of the code.")
+  }
+  r <- raster::raster(raster_path)
+  if (!is.null(geo)) {
+    vv <- as(geo %>% sf::st_transform(as.character(projection(r))) %>% sf::st_buffer(buffer),"Spatial")
+    rr <- raster::crop(r,extent(vv))
+    rr <- raster::mask(rr,vv)
+  } else {
+    rr=r
+  }
+  #wgs_poj4 <- "+proj=longlat +datum=WGS84 +no_defs"
+  #rr %>% projectRaster(crs=wgs_poj4)
+  rr
+}
+
 
 #' @export
 get_city_locations <- function(){
@@ -102,7 +143,7 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   c <- sf::st_coordinates(location) %>% tibble::as_tibble()
   proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
                         " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
-  ghs <- get_GHS_for(NULL,type="250",year=year)
+  ghs <- get_GHS_for(NULL,resolution="250",year=year)
   center1 <- location %>%
     sf::st_transform(sf::st_crs(ghs)) %>%
     sf::st_buffer(dist = 3*radius)
@@ -169,7 +210,7 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   } else {
     water=rmapzen::as_sf(vector_tiles$water) %>%
       sf::st_transform(proj4string) %>%
-      lwgeom::st_make_valid()
+      sf::st_make_valid()
   }
 
   g<-ggplot2::ggplot(contours %>% sf::st_intersection(small_mask)) +
@@ -206,7 +247,7 @@ map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
   c <- sf::st_coordinates(location) %>% tibble::as_tibble()
   proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
                         " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
-  ghs <- get_GHS_for(NULL,type="250",year=year)
+  ghs <- get_GHS_for(NULL,resolution="250",year=year)
   circle <- location %>%
     sf::st_transform(proj4string) %>%
     sf::st_buffer(dist = radius)
@@ -271,7 +312,7 @@ map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
   } else {
     water=rmapzen::as_sf(vector_tiles$water) %>%
       sf::st_transform(proj4string) %>%
-      lwgeom::st_make_valid()
+      sf::st_make_valid()
   }
 
   g<-ggplot2::ggplot(contours %>% sf::st_intersection(small_mask)) +
@@ -370,9 +411,9 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
 
 #' populatin weighted density
 #' @export
-pop_weighted_density_for <- function(location,max_radius_km=40,year="2015",type="250"){
+pop_weighted_density_for <- function(location,max_radius_km=40,year="2015",resolution="250"){
   c <- sf::st_coordinates(location) %>% as_tibble()
-  ghs <- get_GHS_for(NULL,type=type,year=year)
+  ghs <- get_GHS_for(NULL,resolution=resolution,year=year)
   radius=max_radius_km*1000
   center1 <- location %>%
     sf::st_transform(sf::st_crs(ghs)) %>%
@@ -384,7 +425,7 @@ pop_weighted_density_for <- function(location,max_radius_km=40,year="2015",type=
   ras <- stars::st_as_stars(ras1)[center]
   n=names(ras)
   pop <- ras[[n]] %>% sum(na.rm=TRUE)
-  a <- ifelse(type=="250",100/16,100)
+  a <- ifelse(resolution=="250",100/16,100)
   density <- (ras[[n]] * ras[[n]]) %>% sum(na.rm=TRUE)  / pop / a
 }
 
@@ -392,7 +433,7 @@ density_profile_for_city <- function(location,max_radius_km=40,year="2015") {
   c <- sf::st_coordinates(location) %>% as_tibble()
   proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
                         " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
-  ghs <- get_GHS_for(NULL,type="250",year=year)
+  ghs <- get_GHS_for(NULL,resolution="250",year=year)
   radius=max_radius_km*1000
   center1 <- location %>%
     sf::st_transform(sf::st_crs(ghs)) %>%
@@ -573,12 +614,12 @@ plot_density_facet <- function(cities,bks=c(4,10,25,50,100,200,500,1000),
 #' @param cities list of cities of class `sf` point geometries and `name` field
 #' @param years list of years, valid values are `1975`, `1990`, `2000`, `2015`
 #' @param max_radius_km radius to compute the densities
-#' @param type 1k or 250 metre grid
-get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,type="250"){
+#' @param resolution 1k or 250 metre grid
+get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,resolution="250"){
   years %>% lapply(function(year){
     cities$name %>% lapply(function(c){
       location <- locations %>% filter(name==c)
-      density <- pop_weighted_density_for(location,max_radius_km = max_radius_km,year=year,type=type)
+      density <- pop_weighted_density_for(location,max_radius_km = max_radius_km,year=year,resolution=resolution)
       location %>% mutate(density=density)
     }) %>%
       bind_rows %>%
@@ -594,9 +635,11 @@ get_population_weighted_data <- function(cities,years="2015",max_radius_km=30,ty
 #' @export
 bar_race_animation <- function(data){
   colours <- data %>%
+    ungroup %>%
+    sf::st_set_geometry(NULL) %>%
     dplyr::select(name,label,colour) %>%
     unique %>%
-    dplyr::mutate(name=as.character(name),labels=as.character(label))
+    dplyr::mutate(name=as.character(name),label=as.character(label))
 
   p<- data %>%
     dplyr::group_by(Year) %>%

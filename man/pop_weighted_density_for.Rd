@@ -5,7 +5,7 @@
 \title{populatin weighted density}
 \usage{
 pop_weighted_density_for(location, max_radius_km = 40, year = "2015",
-  type = "250")
+  resolution = "250")
 }
 \description{
 populatin weighted density

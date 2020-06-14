@@ -100,6 +100,34 @@ get_city_locations() %>% filter(name=="El Paso") %>% top_n(1,pop) %>%
   ggplot2::ggsave("~/Desktop/density_series12.png",.,width=12,height=8.5)
 ```
 
+## Lagos
+```{r}
+get_city_locations() %>% filter(name=="Lagos") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=50) %>%
+  ggplot2::ggsave("~/Desktop/density_series_lagos.png",.,width=12,height=8.5)
+```
+
+ ## La Plata
+```{r}
+get_city_locations() %>% filter(name=="La Plata") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=20) %>%
+  ggplot2::ggsave("~/Desktop/density_series_la_plata.png",.,width=12,height=8.5)
+```
+
+## Cleveland
+```{r}
+get_city_locations() %>% filter(name=="Cleveland") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=35) %>%
+  ggplot2::ggsave("~/Desktop/density_series13.png",.,width=12,height=8.5)
+```
+
+## Seoul
+```{r}
+get_city_locations() %>% filter(name=="Seoul") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=35) %>%
+  ggplot2::ggsave("~/Desktop/density_series14.png",.,width=12,height=8.5)
+```
+
 
 ```{r}
 cities <-c("Barcelona","Madrid","Valencia","Athens","Paris","Sevilla","Vienna","Sofia","Naples","Turin","Lyon","Brussels","Rome",
@@ -173,9 +201,10 @@ plot_data <- data %>%
   mutate(colour=set_names(RColorBrewer::brewer.pal(length(featured_countries)+1,"Set1"),c(featured_countries,"Other"))[as.character(label)])
 
 colours <- plot_data %>% 
+  st_set_geometry(NULL) %>%
   select(name,country.etc,label,colour) %>% 
   unique %>%
-  mutate(name=as.character(name),country.etc=as.character(country.etc),labels=as.character(labels))
+  mutate(name=as.character(name),country.etc=as.character(country.etc),label=as.character(label))
 
 p<-ggplot(plot_data,aes(x=rank,y=density,fill=name,label=name)) +
   geom_bar(stat="identity") +

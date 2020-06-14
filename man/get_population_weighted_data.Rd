@@ -5,7 +5,7 @@
 \title{Get population weighted data for cities and years}
 \usage{
 get_population_weighted_data(cities, years = "2015",
-  max_radius_km = 30, type = "250")
+  max_radius_km = 30, resolution = "250")
 }
 \arguments{
 \item{cities}{list of cities of class `sf` point geometries and `name` field}
@@ -14,7 +14,7 @@ get_population_weighted_data(cities, years = "2015",
 
 \item{max_radius_km}{radius to compute the densities}
 
-\item{type}{1k or 250 metre grid}
+\item{resolution}{1k or 250 metre grid}
 }
 \description{
 Get population weighted data for cities and years
