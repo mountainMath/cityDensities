@@ -14,3 +14,19 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
+Depends: R (>= 3.1)
+Imports: digest (>= 0.6),
+    dplyr (>= 1.0),
+    httr (>= 1.0.0),
+    tidyr,
+    readr,
+    utils,
+    raster,
+    sf,
+    latex2exp,
+    stars,
+    tanaka
+Suggests: knitr,
+    rmarkdown,
+    scales, 
+    ggplot2

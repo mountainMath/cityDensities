@@ -72,6 +72,110 @@ get_city_locations <- function(){
     sf::st_as_sf(coords = c("long", "lat"), crs = 4326, agr = "constant")
 }
 
+#' @export
+get_city_buffer <- function(city,buffer=30){
+  location<-get_city_locations() %>%
+    filter(name==city) %>%
+    slice_max(n=1,order_by=pop,with_ties=FALSE)
+
+  if (nrow(location)==1) {
+    c <-sf::st_coordinates(location) %>% as_tibble()
+    proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                          " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+
+    location <- location %>%
+      sf::st_transform(proj4string) %>%
+      sf::st_buffer(buffer*1000) %>%
+      sf::st_transform(4326)
+  }
+  else location <- NULL
+}
+
+#' @export
+get_GHS_30_built_data <- function(base_path = getOption("custom_data_path")){
+  if (is.null(base_path) | base_path=="") base_path <- tempdir()
+  base_path=file.path(base_path,"GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0")
+  if (!dir.exists(base_path)) {
+    url <- "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2018A/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30/V2-0/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.zip"
+    tmp <- file.path(tempdir(),"GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.zip")
+    to <- getOption('timeout')
+    options(timeout=5000)
+    download.file(url,tmp)
+    options(timeout=to)
+    if (!dir.exists(base_path)) dir.create(base_path)
+    unzip(tmp,exdir = base_path,unzip = getOption("unzip"))
+    unlink(tmp)
+  }
+  s<-stars::read_stars(file.path(base_path,"V2-0","GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.vrt"))
+  s
+}
+
+
+#' @export
+built_up_graph_for <- function(city_name,s,buffer=30,ds=5){
+  if (is.character(city_name)) {
+    city <- get_city_buffer(city_name,buffer)
+  } else if ('sf' %in% class(city_name)){
+    c <- st_coordinates(city_name) %>% as_tibble()
+    proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                          " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+    city <- city_name %>%
+      st_transform(proj4string) %>%
+      st_buffer(buffer*1000) %>%
+      st_transform(4236)
+    city_name <- city_name$name
+  } else {
+    c <-as_tibble(city_name$coords) %>% mutate(name=c("X","Y")) %>% pivot_wider()
+    proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                          " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+
+    city <- st_point(city_name$coords) %>%
+      st_sfc(crs=4236) %>%
+      st_transform(proj4string) %>%
+      st_buffer(buffer*1000) %>%
+      st_transform(4236)
+    city_name <- city_name$name
+  }
+  sv <- s[city %>% st_transform(st_crs(s))]
+
+  ghs_names <- c("BU_2014","BU_2000","BU_1990","BU_1975")
+  ghs_built_names <- c("Water","NoData","Land",ghs_names)
+  ghs_built_labels <- setNames(c("Water","No Data","Undeveloped","2000 to 2014","1990 to 2000",
+                                 "1975 to 1990","before 1975"),ghs_built_names)
+
+  d<- stars::st_as_stars(sv,downsample=ds)
+  v=d$GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.vrt%>% as.vector() %>% na.omit()
+  ghs_built_counts <- ghs_names %>%
+    lapply(function(n)sum(v==n)) %>%
+    setNames(ghs_names)
+
+  total=ghs_built_counts %>% as_tibble() %>%
+    pivot_longer(everything()) %>%
+    mutate(total=sum(value)) %>%
+    mutate(share=value/sum(value)) %>%
+    mutate(label=paste0(ghs_built_labels[name],": ",scales::percent(share,accuracy = 1)))
+
+
+
+  ghs_built_colours <- setNames(c("white","white","darkgray",RColorBrewer::brewer.pal(5,"PuRd")[seq(5,2)]),
+                                ghs_built_names)
+  ghs_built_labels_p <- setNames(total$label,total$name)
+
+  ggplot(tibble(name=paste0(city_name," (",buffer,"km radius)"))) +
+    stars::geom_stars(data=sv,downsample=ds) +
+    coord_fixed() +
+    scale_fill_manual(values=ghs_built_colours,
+                      labels=ghs_built_labels_p[ghs_names],
+                      breaks=ghs_names) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    facet_wrap(~name) +
+    coord_sf(datum=NA) +
+    labs(title="Build up area by epoch",
+         caption="MountainMath, Data: GHS_BUILT_30",
+         x=NULL,y=NULL,fill=NULL)
+}
+
 
 labels_and_colors <-function(breaks) {
   labels <- paste0(breaks[-length(breaks)], " to ",breaks[-1])

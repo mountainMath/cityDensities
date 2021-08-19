@@ -11,12 +11,15 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
+	message = FALSE,
+	warning = FALSE,
+	collapse = TRUE,
+	comment = "#>"
 )
 library(cityDensities)
 library(tidyverse)
 library(gganimate)
+library(sf)
 ```
 
 
@@ -51,7 +54,7 @@ get_city_locations() %>% filter(name=="Riyadh") %>% top_n(1,pop) %>%
 
 ## Jeddah
 ```{r}
-get_city_locations() %>% filter(name=="Jeddah") %>% top_n(1,pop) %>%
+get_city_locations() %>% filter(name=="Jiddah") %>% top_n(1,pop) %>%
   plot_density_facet(.,radius_km=50) %>%
   ggplot2::ggsave("~/Desktop/density_series10.png",.,width=12,height=8.5)
 ```
@@ -124,9 +127,37 @@ get_city_locations() %>% filter(name=="Cleveland") %>% top_n(1,pop) %>%
 ## Seoul
 ```{r}
 get_city_locations() %>% filter(name=="Seoul") %>% top_n(1,pop) %>%
-  plot_density_facet(.,radius_km=35) %>%
+  plot_density_facet(.,radius_km=50) %>%
   ggplot2::ggsave("~/Desktop/density_series14.png",.,width=12,height=8.5)
 ```
+
+```{r}
+
+```
+
+## Kryvyy Rih
+```{r}
+#get_city_locations() %>% filter(name=="Kryvyy Rih") %>% top_n(1,pop) %>%
+  tibble(name="Kryvyy Rih",x=33.385820388793945,
+          y=47.90483575868252) %>% st_as_sf(coords=c("x","y"),crs=4326) %>%
+  plot_density_facet(.,radius_km=100) %>%
+  ggplot2::ggsave("~/Desktop/density_series16.png",.,width=12,height=8.5)
+```
+
+## Calgary
+```{r}
+get_city_locations() %>% filter(name=="Calgary") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=25) %>%
+  ggplot2::ggsave("~/Desktop/density_series17.png",.,width=12,height=8.5)
+```
+
+## Edmonton
+```{r}
+get_city_locations() %>% filter(name=="Edmonton") %>% top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=25) %>%
+  ggplot2::ggsave("~/Desktop/density_series18.png",.,width=12,height=8.5)
+```
+
 
 
 ```{r}
