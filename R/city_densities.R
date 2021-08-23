@@ -93,7 +93,7 @@ get_city_buffer <- function(city,buffer=30){
 
 #' @export
 get_GHS_30_built_data <- function(base_path = getOption("custom_data_path")){
-  if (is.null(base_path) | base_path=="") base_path <- tempdir()
+  if (is.null(base_path) || base_path=="") base_path <- tempdir()
   base_path=file.path(base_path,"GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0")
   if (!dir.exists(base_path)) {
     url <- "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2018A/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30/V2-0/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.zip"
@@ -163,7 +163,7 @@ built_up_graph_for <- function(city_name,s,buffer=30,ds=5){
 
   ggplot(tibble(name=paste0(city_name," (",buffer,"km radius)"))) +
     stars::geom_stars(data=sv,downsample=ds) +
-    coord_fixed() +
+    #coord_fixed() +
     scale_fill_manual(values=ghs_built_colours,
                       labels=ghs_built_labels_p[ghs_names],
                       breaks=ghs_names) +
