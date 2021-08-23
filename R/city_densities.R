@@ -770,3 +770,81 @@ bar_race_animation <- function(data){
     gganimate::ease_aes('linear')
 }
 
+get_ghs_shares <- function(sv,ds=5){
+  ghs_names <- c("BU_2014","BU_2000","BU_1990","BU_1975")
+  d<- stars::st_as_stars(sv,downsample=ds)
+  v=d$GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.vrt%>% as.vector() %>% na.omit()
+  ghs_built_counts <- ghs_names %>%
+    lapply(function(n)sum(v==n)) %>%
+    setNames(ghs_names)
+
+  total=ghs_built_counts %>% as_tibble() %>%
+    pivot_longer(everything()) %>%
+    mutate(total=sum(value)) %>%
+    mutate(share=value/sum(value))
+}
+
+make_map <- function(sv,ds=5,show_shares = FALSE){
+  ghs_names <- c("BU_2014","BU_2000","BU_1990","BU_1975")
+  ghs_built_names <- c("Water","NoData","Land",ghs_names)
+  ghs_built_labels <- setNames(c("Water","No Data","Undeveloped","2000 to 2014","1990 to 2000",
+                                 "1975 to 1990","Before 1975"),ghs_built_names)
+
+  ghs_built_colours <- setNames(c("white","white","darkgray",RColorBrewer::brewer.pal(5,"PuRd")[seq(5,2)]),
+                                ghs_built_names)
+
+  if (show_shares) {
+    total <- get_ghs_shares(sv,ds) %>%
+      mutate(label=paste0(ghs_built_labels[name],": ",scales::percent(share,accuracy = 1)))
+    ghs_built_labels <- setNames(total$label,total$name)
+  }
+
+  ggplot() +
+    stars::geom_stars(data=sv,downsample=ds) +
+    #coord_fixed() +
+    scale_fill_manual(values=ghs_built_colours,
+                      labels=ghs_built_labels[ghs_names],
+                      breaks=factor(ghs_names),
+                      drop = FALSE) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    coord_sf(datum=NA) +
+    labs(#title="Build up area by epoch",
+      #caption="MountainMath, Data: GHS_BUILT_30",
+      x=NULL,y=NULL,fill=NULL)
+}
+
+#' @export
+make_city_map <- function(city_name,s,buffer=30,ds=5,show_shares = FALSE){
+  if (is.character(city_name)) {
+    city <- get_city_buffer(city_name,buffer)
+  } else if ('sf' %in% class(city_name)){
+    c <- sf::st_coordinates(city_name) %>% as_tibble()
+    proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                          " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+    city <- city_name %>%
+      sf::st_transform(proj4string) %>%
+      sf::st_buffer(buffer*1000) %>%
+      sf::st_transform(4236)
+    city_name <- city_name$name
+  } else {
+    c <-as_tibble(city_name$coords) %>% mutate(name=c("X","Y")) %>% pivot_wider()
+    proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
+                          " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
+
+    city <- sf::st_point(city_name$coords) %>%
+      sf::st_sfc(crs=4236) %>%
+      sf::st_transform(proj4string) %>%
+      sf::st_buffer(buffer*1000) %>%
+      sf::st_transform(4236)
+    city_name <- city_name$name
+  }
+  sv <- s[city %>% sf::st_transform(sf::st_crs(s))]
+
+  if (!is.null(names(city_name))) city_name <- names(city_name)
+
+  make_map(sv,ds,show_shares) +
+    geom_blank(data=tibble(name=paste0(city_name," (",buffer,"km radius)"))) +
+    facet_wrap(~name)
+}
+
