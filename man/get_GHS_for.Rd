@@ -4,8 +4,13 @@
 \alias{get_GHS_for}
 \title{Get GHS populatin data}
 \usage{
-get_GHS_for(geo = NULL, resolution = c("250", "1k"), year = c("1975",
-  "1990", "2000", "2015"))
+get_GHS_for(
+  geo = NULL,
+  resolution = c("250", "1k"),
+  year = c("1975", "1990", "2000", "2015"),
+  timeout = 10000,
+  base_path = getOption("custom_data_path")
+)
 }
 \arguments{
 \item{geo}{cut down to geography (will include data in buffer around geography)}
@@ -13,6 +18,13 @@ get_GHS_for(geo = NULL, resolution = c("250", "1k"), year = c("1975",
 \item{resolution}{resolution}
 
 \item{year}{year for the data series}
+
+\item{timeout}{timeout for data download}
+
+\item{base_path}{local path to cache GHSL data}
+}
+\value{
+raster object for pppulation data
 }
 \description{
 Get GHS populatin data

@@ -1,10 +1,10 @@
 ---
-title: "Vignette Title"
-author: "Vignette Author"
+title: "Example cases"
+author: "Jens von Bergmann"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteIndexEntry{Example cases}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -17,22 +17,33 @@ knitr::opts_chunk$set(
 	comment = "#>"
 )
 library(cityDensities)
-library(tidyverse)
-library(gganimate)
-library(sf)
-
-image_path <- tempdir()
+library(dplyr)
 ```
 
 
 ## Hong Kong
 ```{r fig.height=8.5, fig.width=12}
-get_city_locations() %>% filter(name=="Hong Kong") %>% top_n(1,pop) %>%
+get_city_locations() %>% 
+  filter(name=="Hong Kong") %>% 
+  top_n(1,pop) %>%
   plot_facet(.,radius_km=30,ncol=1,
-             bks=c(1,4,50.00, 100.00,250,500,750,1000,1500),smoothing=250)
+             bks=c(1,4,50.00, 100.00,250,500,750,1000,1500),
+             smoothing=250)
 ```
 
 ```{r fig.height=8.5, fig.width=8}
 s <- get_GHS_30_built_data()
 make_city_map("Hong Kong",s,30,2,show_shares = TRUE)
 ```
+
+
+```{r fig.height=8.5, fig.width=12}
+get_city_locations() %>% 
+  filter(name=="Hong Kong") %>% 
+  top_n(1,pop) %>%
+  plot_density_facet(.,radius_km=30)
+```
+
+
+
+

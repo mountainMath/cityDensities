@@ -4,8 +4,14 @@
 \alias{get_GHS_built_data}
 \title{Get GHS land use data}
 \usage{
-get_GHS_built_data(geo = NULL, resolution = c("30", "250", "1K"),
-  year = c("1975", "1990", "2000", "2014"))
+get_GHS_built_data(
+  geo = NULL,
+  resolution = c("30", "250", "1K"),
+  year = c("1975", "1990", "2000", "2014"),
+  crs = "54009",
+  timeout = 10000,
+  base_path = getOption("custom_data_path")
+)
 }
 \arguments{
 \item{geo}{cut down to geography (will include data in buffer around geography)}
@@ -13,6 +19,12 @@ get_GHS_built_data(geo = NULL, resolution = c("30", "250", "1K"),
 \item{resolution}{resolution}
 
 \item{year}{year for the data series}
+
+\item{crs}{for the geotiff, options are 54009 (Mollweide) and 3857 (Web Mercator)}
+
+\item{timeout}{timeout for data download}
+
+\item{base_path}{local path to store GHSL data}
 }
 \description{
 Get GHS land use data

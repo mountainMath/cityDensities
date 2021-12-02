@@ -4,8 +4,12 @@
 \alias{get_population_weighted_data}
 \title{Get population weighted data for cities and years}
 \usage{
-get_population_weighted_data(cities, years = "2015",
-  max_radius_km = 30, resolution = "250")
+get_population_weighted_data(
+  cities,
+  years = "2015",
+  max_radius_km = 30,
+  resolution = "250"
+)
 }
 \arguments{
 \item{cities}{list of cities of class `sf` point geometries and `name` field}

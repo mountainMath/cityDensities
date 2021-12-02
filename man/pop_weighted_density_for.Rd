@@ -4,8 +4,12 @@
 \alias{pop_weighted_density_for}
 \title{populatin weighted density}
 \usage{
-pop_weighted_density_for(location, max_radius_km = 40, year = "2015",
-  resolution = "250")
+pop_weighted_density_for(
+  location,
+  max_radius_km = 40,
+  year = "2015",
+  resolution = "250"
+)
 }
 \description{
 populatin weighted density

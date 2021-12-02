@@ -2,15 +2,25 @@
 #' @param geo cut down to geography (will include data in buffer around geography)
 #' @param resolution resolution
 #' @param year year for the data series
+#' @param timeout timeout for data download
+#' @param base_path local path to cache GHSL data
+#' @return raster object for pppulation data
 #' @export
-get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),year=c("1975","1990","2000","2015")){
+get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),
+                      year=c("1975","1990","2000","2015"),
+                      timeout=10000,
+                      base_path=getOption("custom_data_path")){
+  if (is.null(base_path)) base_path <- tempdir()
   buffer <- ifelse(resolution=="1k",500,125)
-  raster_path = paste0(getOption("custom_data_path"),"GHS/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.tif")
+  raster_path = paste0(base_path,"GHS/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.tif")
   if (!file.exists(raster_path)) {
     temp=tempfile()
+    to <- getOption("timeout")
+    options("timeout"=timeout)
     download.file(paste0("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GPW4_GLOBE_R2015A/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"/V1-0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.zip"),temp)
-    exdir=file.path(getOption("custom_data_path"),"GHS")
-    if (!dir.exists(exdir)) dir.create(exdir)
+    options(timeout = to)
+    exdir=file.path(base_path,"GHS")
+    if (!dir.exists(exdir)) {dir.create(exdir)}
     zip::unzip(temp,exdir = exdir)
     if (!file.exists(raster_path))
       stop("Downloading of raster file failed, probably needs some tweaking of the code.")
@@ -33,19 +43,28 @@ get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),year=c("1975","1990","20
 #' @param resolution resolution
 #' @param year year for the data series
 #' @param crs for the geotiff, options are 54009 (Mollweide) and 3857 (Web Mercator)
+#' @param timeout timeout for data download
+#' @param base_path local path to store GHSL data
 #' @export
-get_GHS_built_data<-function(geo=NULL,resolution=c("30","250","1K"),year=c("1975","1990","2000","2014"),crs="54009"){
+get_GHS_built_data<-function(geo=NULL,resolution=c("30","250","1K"),
+                             year=c("1975","1990","2000","2014"),crs="54009",
+                             timeout=10000,
+                             base_path = getOption("custom_data_path")){
+  if (is.null(base_path)) base_path <- tempdir()
   buffer <- ifelse(resolution=="1K",500,125)
   crs="54009"
   core <-paste0("GHS_BUILT_LDS",year,"_GLOBE_R2018A_",crs,"_",resolution)
   file <- paste0(core,"_V2_0")
   url <- paste0("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/",core,"/V2-0/",file,".zip")
-  raster_path = paste0(getOption("custom_data_path"),"/GHS/GHS_BUILT/",file,".tif")
+  raster_path = paste0(base_path,"/GHS/GHS_BUILT/",file,".tif")
   if (!file.exists(raster_path)) {
+    to <- getOption("timeout")
     temp=tempfile()
+    options("timeout"=timeout)
     download.file(url,temp)
-    exdir=file.path(getOption("custom_data_path"),"GHS/GHS_BUILT")
-    if (!dir.exists(exdir)) dir.create(exdir)
+    options(timeout = to)
+    exdir=file.path(base_path,"GHS/GHS_BUILT")
+    if (!dir.exists(exdir)) {dir.create(exdir)}
     zip::unzip(temp,exdir = exdir)
     if (!file.exists(raster_path))
       stop("Downloading of raster file failed, probably needs some tweaking of the code.")
@@ -63,7 +82,8 @@ get_GHS_built_data<-function(geo=NULL,resolution=c("30","250","1K"),year=c("1975
   rr
 }
 
-
+#' Get location data for city from maps package
+#' @return a tibble with matching city location
 #' @export
 get_city_locations <- function(){
   location<-maps::world.cities %>%
@@ -91,15 +111,20 @@ get_city_buffer <- function(city,buffer=30){
   else location <- NULL
 }
 
+#' Get a reference to GHS built data, download if needed
+#'
+#' @param base_path Local path to store data
+#' @param timeout timeout for data download
+#' @return stars object for built data
 #' @export
-get_GHS_30_built_data <- function(base_path = getOption("custom_data_path")){
+get_GHS_30_built_data <- function(base_path = getOption("custom_data_path"), timeout=10000){
   if (is.null(base_path) || base_path=="") base_path <- tempdir()
   base_path=file.path(base_path,"GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0")
   if (!dir.exists(base_path)) {
     url <- "https://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2018A/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30/V2-0/GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.zip"
     tmp <- file.path(tempdir(),"GHS_BUILT_LDSMT_GLOBE_R2018A_3857_30_V2_0.zip")
     to <- getOption('timeout')
-    options(timeout=5000)
+    options(timeout=timeout)
     download.file(url,tmp)
     options(timeout=to)
     if (!dir.exists(base_path)) dir.create(base_path)
@@ -111,6 +136,13 @@ get_GHS_30_built_data <- function(base_path = getOption("custom_data_path")){
 }
 
 
+#' Graph built-up area
+#'
+#' @param city_name name of city or sf object with columns `name` and custom location
+#' @param s stars object with buit data
+#' @param buffer radius around central city location in km
+#' @param ds downsample factor when plotting data
+#' @return a ggplot2 object
 #' @export
 built_up_graph_for <- function(city_name,s,buffer=30,ds=5){
   if (is.character(city_name)) {
@@ -120,23 +152,23 @@ built_up_graph_for <- function(city_name,s,buffer=30,ds=5){
     proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
                           " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
     city <- city_name %>%
-      st_transform(proj4string) %>%
-      st_buffer(buffer*1000) %>%
-      st_transform(4236)
+      sf::st_transform(proj4string) %>%
+      sf::st_buffer(buffer*1000) %>%
+      sf::st_transform(4236)
     city_name <- city_name$name
   } else {
-    c <-as_tibble(city_name$coords) %>% mutate(name=c("X","Y")) %>% pivot_wider()
+    c <-as_tibble(city_name$coords) %>% mutate(name=c("X","Y")) %>% tidyr::pivot_wider()
     proj4string <- paste0("+proj=lcc +lat_1=",c$Y-1," +lat_2=",c$Y+1," +lat_0=",c$Y,
                           " +lon_0=",c$X," +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs")
 
-    city <- st_point(city_name$coords) %>%
-      st_sfc(crs=4236) %>%
-      st_transform(proj4string) %>%
-      st_buffer(buffer*1000) %>%
-      st_transform(4236)
+    city <- sf::st_point(city_name$coords) %>%
+      sf::st_sfc(crs=4236) %>%
+      sf::st_transform(proj4string) %>%
+      sf::st_buffer(buffer*1000) %>%
+      sf::st_transform(4236)
     city_name <- city_name$name
   }
-  sv <- s[city %>% st_transform(st_crs(s))]
+  sv <- s[city %>% sf::st_transform(st_crs(s))]
 
   ghs_names <- c("BU_2014","BU_2000","BU_1990","BU_1975")
   ghs_built_names <- c("Water","NoData","Land",ghs_names)
@@ -150,10 +182,10 @@ built_up_graph_for <- function(city_name,s,buffer=30,ds=5){
     setNames(ghs_names)
 
   total=ghs_built_counts %>% as_tibble() %>%
-    pivot_longer(everything()) %>%
-    mutate(total=sum(value)) %>%
-    mutate(share=value/sum(value)) %>%
-    mutate(label=paste0(ghs_built_labels[name],": ",scales::percent(share,accuracy = 1)))
+    tidyr::pivot_longer(everything()) %>%
+    dplyr::mutate(total=sum(.data$value)) %>%
+    dplyr::mutate(share=.data$value/sum(.data$value)) %>%
+    dplyr::mutate(label=paste0(ghs_built_labels[.data$name],": ",scales::percent(.data$share,accuracy = 1)))
 
 
 
@@ -215,26 +247,26 @@ grid_arrange_shared_legend <- function(plots, legend_plot,
 
   position <- match.arg(position)
   if (position=="bottom") {
-    g <- ggplotGrob(legend_plot + theme(legend.position = position) +
-                      guides(fill=guide_legend(nrow=legend_rows)))$grobs
+    g <- ggplot2::ggplotGrob(legend_plot + ggplot2::theme(legend.position = position) +
+                               ggplot2::guides(fill=ggplot2::guide_legend(nrow=legend_rows)))$grobs
   } else {
-    g <- ggplotGrob(legend_plot + theme(legend.position = position))$grobs
+    g <- ggplot2::ggplotGrob(legend_plot + ggplot2::theme(legend.position = position))$grobs
   }
   legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
   lheight <- sum(legend$height)
   lwidth <- sum(legend$width)
-  gl <- lapply(plots, function(x) x + theme(legend.position = "none"))
+  gl <- lapply(plots, function(x) x + ggplot2::theme(legend.position = "none"))
   gl <- c(gl, nrow = nrow, ncol = ncol)
 
   combined <- switch(position,
                      "bottom" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
                                             legend,
                                             ncol = 1,
-                                            heights = grid::unit.c(unit(1, "npc") - lheight, lheight)),
+                                            heights = grid::unit.c(grid::unit(1, "npc") - lheight, lheight)),
                      "right" = gridExtra::arrangeGrob(do.call(gridExtra::arrangeGrob, gl),
                                            legend,
                                            ncol = 2,
-                                           widths = grid::unit.c(unit(1, "npc") - lwidth, lwidth)))
+                                           widths = grid::unit.c(grid::unit(1, "npc") - lwidth, lwidth)))
   combined
 }
 
@@ -274,7 +306,7 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
     dplyr::mutate(label=dplyr::coalesce(as.character(upper_labels[as.character(max)]),
                           as.character(lower_labels[as.character(min)]))) %>%
     dplyr::mutate(f=labels[label],c=NA) %>%
-    select(-label)
+    dplyr::select(-label)
 
 
   contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=shift[1],dy=shift[2]), breaks = bks) %>%
@@ -301,8 +333,8 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
     sf::st_buffer(radius/20) %>%
     sf::st_transform(crs=proj4string)
 
-  bbox <- sf::st_bbox(center %>% st_transform(proj4string))
-  bbox2 <- sf::st_bbox(center %>% st_transform(4326))
+  bbox <- sf::st_bbox(center %>% sf::st_transform(proj4string))
+  bbox2 <- sf::st_bbox(center %>% sf::st_transform(4326))
 
   tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
   vector_tiles <- cancensusHelpers::simpleCache(cancensusHelpers::get_vector_tiles(bbox2), tile_cache)
@@ -404,7 +436,7 @@ map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
     sf::st_buffer(radius/20)
 
   bbox <- sf::st_bbox(circle)
-  bbox2 <- sf::st_bbox(circle %>% st_transform(4326))
+  bbox2 <- sf::st_bbox(circle %>% sf::st_transform(4326))
 
   tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
   vector_tiles <- cancensusHelpers::simpleCache(cancensusHelpers::get_vector_tiles(bbox2), tile_cache)
@@ -488,20 +520,21 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
     city_names <- cities
   }
 
-  d=setdiff(city_names,location$name)
+  d <- setdiff(city_names,location$name)
   if (length(d)>0) stop(paste0("Could not find ",paste0(d,collapse = ", "),"."))
 
 
   plots <- purrr::map(city_names,function(c){
     #print(c)
     l <- location %>% filter(name==c)
-    years %>% purrr::map(function(y)map_plot_for_city(location=l,
-                                               title=paste0(c,", ",y),
-                                               radius=radius_km*1000,
-                                               bks=bks,year=y,
-                                               smoothing=smoothing,
-                                               remove_lowest = remove_lowest,
-                                               lowest_color=lowest_color))
+    g<-years %>%
+      purrr::map(function(y)map_plot_for_city(location=l,
+                                              title=paste0(c,", ",y),
+                                              radius=radius_km*1000,
+                                              bks=bks,year=y,
+                                              smoothing=smoothing,
+                                              remove_lowest = remove_lowest,
+                                              lowest_color=lowest_color))
   }) %>%
     unlist(recursive = FALSE)
 
@@ -532,6 +565,7 @@ pop_weighted_density_for <- function(location,max_radius_km=40,year="2015",resol
   a <- ifelse(resolution=="250",100/16,100)
   density <- (ras[[n]] * ras[[n]]) %>% sum(na.rm=TRUE)  / pop / a
 }
+
 
 density_profile_for_city <- function(location,max_radius_km=40,year="2015") {
   c <- sf::st_coordinates(location) %>% as_tibble()
@@ -612,7 +646,17 @@ density_plot_for_city <- function(location,max_radius_km=40,year="2015"){
 }
 
 
-density_plot_series <- function(location,years=c("1975","1990","2000","2015"),radius_km=30,max_density=NULL){
+#' Plot city density series
+#'
+#' @param location a location class `sf` point geometries and `name` field
+#' @param years list of years to include in the plot
+#' @param radius_km radius of plots
+#' @param max_density
+#'
+#' @return ggplot2 object
+#' @export
+density_plot_series <- function(location,years=c("1975","1990","2000","2015"),
+                                radius_km=30,max_density=NULL){
 
   caption <- 'Data : European Commission, Joint Research Centre (JRC); Columbia University, CIESIN (2015): GHS population grid, derived from GPW4.'
 
@@ -651,7 +695,15 @@ density_plot_series <- function(location,years=c("1975","1990","2000","2015"),ra
 }
 
 
-
+#' Plot fact graph with city maps and density patterns
+#'
+#' @param cities list of cities of class `sf` point geometries and `name` field
+#' @param years list of years, valid values are `1975`, `1990`, `2000`, `2015`
+#' @param bks break points for poopulation densities
+#' @param max_radius_km radius to compute the densities
+#' @param remove_lowest logical, remove population below the lowest density breakpoint
+#' @param lowest_color colour for lowest poulation density bracket if not removed
+#' @return a ggplot2 object
 #' @export
 plot_density_facet <- function(cities,bks=c(4,10,25,50,100,200,500,1000),
                                radius_km=40,years=c("1975","1990","2000","2015"),remove_lowest=TRUE,lowest_color=NULL) {
@@ -778,10 +830,11 @@ get_ghs_shares <- function(sv,ds=5){
     lapply(function(n)sum(v==n)) %>%
     setNames(ghs_names)
 
-  total=ghs_built_counts %>% as_tibble() %>%
-    pivot_longer(everything()) %>%
-    mutate(total=sum(value)) %>%
-    mutate(share=value/sum(value))
+  total=ghs_built_counts %>%
+    as_tibble() %>%
+    tidyr::pivot_longer(everything()) %>%
+    dplyr::mutate(total=sum(.data$value)) %>%
+    dplyr::mutate(share=.data$value/sum(.data$value))
 }
 
 make_map <- function(sv,ds=5,show_shares = FALSE){
@@ -799,17 +852,17 @@ make_map <- function(sv,ds=5,show_shares = FALSE){
     ghs_built_labels <- setNames(total$label,total$name)
   }
 
-  ggplot() +
+  ggplot2::ggplot() +
     stars::geom_stars(data=sv,downsample=ds) +
     #coord_fixed() +
-    scale_fill_manual(values=ghs_built_colours,
+    ggplot2::scale_fill_manual(values=ghs_built_colours,
                       labels=ghs_built_labels[ghs_names],
                       breaks=factor(ghs_names),
                       drop = FALSE) +
-    theme_bw() +
-    theme(legend.position = "bottom") +
-    coord_sf(datum=NA) +
-    labs(#title="Build up area by epoch",
+    ggplot2::theme_bw() +
+    ggplot2::theme(legend.position = "bottom") +
+    ggplot2::coord_sf(datum=NA) +
+    ggplot2::labs(#title="Build up area by epoch",
       #caption="MountainMath, Data: GHS_BUILT_30",
       x=NULL,y=NULL,fill=NULL)
 }
@@ -844,7 +897,7 @@ make_city_map <- function(city_name,s,buffer=30,ds=5,show_shares = FALSE){
   if (!is.null(names(city_name))) city_name <- names(city_name)
 
   make_map(sv,ds,show_shares) +
-    geom_blank(data=tibble(name=paste0(city_name," (",buffer,"km radius)"))) +
-    facet_wrap(~name)
+    ggplot2::geom_blank(data=tibble(name=paste0(city_name," (",buffer,"km radius)"))) +
+    ggplot2::facet_wrap(~name)
 }
 
