@@ -3,6 +3,7 @@
 export(bar_race_animation)
 export(built_up_graph_for)
 export(density_plot_series)
+export(get_GHS2022A_for)
 export(get_GHS_30_built_data)
 export(get_GHS_built_data)
 export(get_GHS_for)

@@ -1,3 +1,129 @@
+#' Get GHS 2022A population and built data
+#' @param geo cut down to geography (will include data in buffer around geography)
+#' @param type type of the sercies
+#' @param resolution resolution
+#' @param years year for the data series
+#' @param timeout timeout for data download
+#' @param version version of the dataset
+#' @param layer optional layer
+#' @param base_path local path to cache GHSL data
+#' @return stars object for ppulation data
+#' @export
+get_GHS2022A_for <- function(geo=NULL,
+                             type = c("BUILT_S","BUILT_V","POP","BUILT_H_AGBH","BUILT_H_ANBH"),
+                             resolution=c("100","1000"),
+                             years=c("1975", "1980", "1985", "1990", "1995", "2000", "2005", "2010", "2015", "2020"),
+                             timeout=10000,
+                             version="V1-0",
+                             layer=NULL,
+                             base_path=getOption("custom_data_path")){
+
+  resolution <- resolution[1]
+  type <- type[1]
+  if (is.null(base_path)) base_path <- tempdir()
+  ghs2022A_base <- file.path(base_path,"GHS","GHS2022A")
+
+  if (type=="BUILT_H_AGBH") {
+    years = "2018"
+    paths <- paste0("GHS_",type,"_E",years,"_GLOBE_R2022A_54009_",resolution)
+  } else   if (type=="SMOD") {
+    paths <- paste0("GHS_SMOD_P",years,"_GLOBE_R2022A_54009_1000")
+  } else if (type=="FUA") {
+    paths <- "GHS_FUA_UCDB2015_GLOBE_R2019A_54009_1K"
+    years <- "2019"
+  } else if (type=="UCDB") {
+    paths <- "GHS_STAT_UCDB2015MT_GLOBE_R2019A"
+    years <- "2015"
+  } else {
+    paths <- paste0("GHS_",type,"_E",years,"_GLOBE_R2022A_54009_",resolution)
+  }
+
+  local_paths <- file.path(ghs2022A_base,paths)
+
+  if (!dir.exists(file.path(base_path,"GHS"))) dir.create(file.path(base_path,"GHS"))
+
+  for (index in seq(1:length(local_paths))) {
+    local_path <- local_paths[index]
+    path <- paths[index]
+    if (!dir.exists(local_path) | length(dir(local_path))==0) {
+      if (!dir.exists(ghs2022A_base)) {
+        dir.create(ghs2022A_base)
+      }
+      dir.create(local_path)
+      if (type %in% c("BUILT_S","BUIT_V")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_",type,"_GLOBE_R2022A/",
+                      "GHS_",type,"_GLOBE_R2022A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type=="POP") {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_",type,"_GLOBE_R2022A/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2022A/",
+                      "GHS_",type,"_GLOBE_R2022A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2022A/",
+                      "GHS_",type,"_GLOBE_R2022A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type=="SMOD"){
+        url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_SMOD_GLOBE_R2022A/GHS_SMOD_P2030_GLOBE_R2022A_54009_1000/V1-0/GHS_SMOD_P2030_GLOBE_R2022A_54009_1000_V1_0.zip"
+      } else if (type=="UCDB"){
+          url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL//GHS_STAT_UCDB2015MT_GLOBE_R2019A/V1-2/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.zip"
+      } else if (type=="FUA"){
+          url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_FUA_UCDB2015_GLOBE_R2019A/V1-0/GHS_FUA_UCDB2015_GLOBE_R2019A_54009_1K_V1_0.zip"
+      } else {
+        stop("unkown type")
+      }
+      tmp=tempfile()
+      old_timeout=getOption("timeout")
+      options("timeout"=timeout)
+      utils::download.file(url,tmp,mode = "wb")
+      options("timeout"=old_timeout)
+      utils::unzip(tmp,exdir=local_path,unzip=getOption("unzip"))
+      unlink(tmp)
+    }
+  }
+  if (length(local_paths)==1) {
+    ll <- dir(local_paths,full.names = TRUE)
+    if(length(ll)==1 && dir.exists(ll)) local_paths <-ll
+  }
+  tif <- local_paths |> lapply(function(local_path)dir(local_path,"\\.tif$",full.names = TRUE)) |> unlist()
+  gpkg <- local_paths |> lapply(function(local_path)dir(local_path,"\\.gpkg$",full.names = TRUE)) |> unlist()
+  if (length(tif)>0) {
+    s <- stars::read_stars(tif)
+    nn=names(s)
+    new_names <- gsub("2022|54009|1000","",nn) %>%
+      stringr::str_extract("\\d{4}") |>
+      unlist()
+    s<-s |> setNames(paste0(type,"__",new_names))
+
+    if (!is.null(geo)) {
+      ss <- s |> sf::st_crop(geo %>% sf::st_transform(sf::st_crs(s))) |> stars::st_as_stars()
+    } else {
+      ss <- s
+    }
+    #wgs_poj4 <- "+proj=longlat +datum=WGS84 +no_defs"
+    #rr %>% projectRaster(crs=wgs_poj4)
+  } else if (length(gpkg)>0) {
+    if (length(gpkg)>1 &!is.null(layer)) {
+        gpkg <- gpkg[grepl(layer,gpkg)]
+      }
+
+    if (length(gpkg)>1) {
+      warning(paste0("Have several layers, selecting first one of ",paste0(basename(gpkg),collapse=", ")))
+      gpkg <- gpkg[1]
+    }
+    ss <- sf::read_sf(gpkg)
+  }
+  ss
+}
+
+
+
 #' Get GHS populatin data
 #' @param geo cut down to geography (will include data in buffer around geography)
 #' @param resolution resolution
@@ -27,8 +153,8 @@ get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),
   }
   r <- raster::raster(raster_path)
   if (!is.null(geo)) {
-    vv <- as(geo %>% sf::st_transform(as.character(projection(r))) %>% sf::st_buffer(buffer),"Spatial")
-    rr <- raster::crop(r,extent(vv))
+    vv <- as(geo %>% sf::st_transform(as.character(raster::projection(r))) %>% sf::st_buffer(buffer),"Spatial")
+    rr <- raster::crop(r,raster::extent(vv))
     rr <- raster::mask(rr,vv)
   } else {
     rr=r
@@ -71,8 +197,8 @@ get_GHS_built_data<-function(geo=NULL,resolution=c("30","250","1K"),
   }
   r <- raster::raster(raster_path)
   if (!is.null(geo)) {
-    vv <- as(geo %>% sf::st_transform(as.character(projection(r))) %>% sf::st_buffer(buffer),"Spatial")
-    rr <- raster::crop(r,extent(vv))
+    vv <- as(geo %>% sf::st_transform(as.character(raster::projection(r))) %>% sf::st_buffer(buffer),"Spatial")
+    rr <- raster::crop(r,raster::extent(vv))
     rr <- raster::mask(rr,vv)
   } else {
     rr=r
@@ -302,17 +428,19 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   lower_labels <- rlang::set_names(names(labels),breaks[-length(breaks)])
   if (!is.null(lowest_color)) labels[1+remove_lowest]=lowest_color
 
-  contours1 <- tanaka::tanaka_contour(rassmooth, breaks = bks)  %>%
+  contours1 <- tanaka::tanaka_contour(terra::rast(rassmooth), breaks = bks)  %>%
     dplyr::mutate(label=dplyr::coalesce(as.character(upper_labels[as.character(max)]),
                           as.character(lower_labels[as.character(min)]))) %>%
     dplyr::mutate(f=labels[label],c=NA) %>%
     dplyr::select(-label)
 
 
-  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=shift[1],dy=shift[2]), breaks = bks) %>%
+  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=shift[1],dy=shift[2]) |> terra::rast(),
+                                      breaks = bks) %>%
     dplyr::mutate(f="#000000aa",
                   id=id-0.5,c="black")
-  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=-shift[1]/2,dy=-shift[2]/2), breaks = bks) %>%
+  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(dx=-shift[1]/2,dy=-shift[2]/2) |> terra::rast(),
+                                      breaks = bks) %>%
     dplyr::mutate(f="#ffffffaa",
                   id=id-0.6,c="white")
   contours <- do.call(rbind,list(
@@ -336,8 +464,8 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   bbox <- sf::st_bbox(center %>% sf::st_transform(proj4string))
   bbox2 <- sf::st_bbox(center %>% sf::st_transform(4326))
 
-  tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
-  vector_tiles <- cancensusHelpers::simpleCache(cancensusHelpers::get_vector_tiles(bbox2), tile_cache)
+  #tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
+  vector_tiles <- mountainmathHelpers::get_vector_tiles(bbox2)
 
   if (length(vector_tiles$water$features)==0) { # workaround if there is no water nearby
     water=rmapzen::as_sf(vector_tiles$roads) %>%
@@ -405,16 +533,18 @@ map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
   lower_labels <- rlang::set_names(names(labels),breaks[-length(breaks)])
   if (!is.null(lowest_color)) labels[1+remove_lowest]=lowest_color
 
-  contours1 <- tanaka::tanaka_contour(rassmooth, breaks = bks)  %>%
+  contours1 <- tanaka::tanaka_contour(terra::rast(rassmooth), breaks = bks)  %>%
     dplyr::mutate(label=dplyr::coalesce(as.character(upper_labels[as.character(max)]),
                                         as.character(lower_labels[as.character(min)]))) %>%
     dplyr::mutate(f=labels[label],c=NA)
 
 
-  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=shift[1],y=shift[2]), breaks = bks) %>%
+  contours2 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=shift[1],y=shift[2]) |> terra::rast(),
+                                      breaks = bks) %>%
     dplyr::mutate(f="#000000aa",
                   id=id-0.5,c="black")
-  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=-shift[1]/2,y=-shift[2]/2), breaks = bks) %>%
+  contours3 <- tanaka::tanaka_contour(rassmooth %>% raster::shift(x=-shift[1]/2,y=-shift[2]/2) |> terra::rast(),
+                                      breaks = bks) %>%
     dplyr::mutate(f="#ffffffaa",
                   id=id-0.6,c="white")
   contours <- dplyr::bind_rows(
@@ -438,8 +568,8 @@ map_plot_for_city_new <- function(location,title,radius=25000,smoothing=500,
   bbox <- sf::st_bbox(circle)
   bbox2 <- sf::st_bbox(circle %>% sf::st_transform(4326))
 
-  tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
-  vector_tiles <- cancensusHelpers::simpleCache(cancensusHelpers::get_vector_tiles(bbox2), tile_cache)
+  #tile_cache <- paste0(gsub(" ","_",gsub(",.+$","",paste0(round(c,3),collapse = "_"))), "_",radius,"_density_vector_tiles")
+  vector_tiles <- mountainmathHelpers::get_vector_tiles(bbox2)
 
   if (length(vector_tiles$water$features)==0) { # workaround if there is no water nearby
     water=rmapzen::as_sf(vector_tiles$roads) %>%
@@ -503,6 +633,8 @@ example_of_plot_boundary_issue <- function(){
     ggplot2::theme(plot.title =  ggplot2::element_text(hjust = 0.5))
 }
 
+
+
 #' City density grid
 #' @export
 plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75.00,100.00,200),
@@ -524,11 +656,11 @@ plot_facet <- function(cities,bks=c(1,2.50,5.00,7.50,10.00,17.50,25.00,50.00, 75
   if (length(d)>0) stop(paste0("Could not find ",paste0(d,collapse = ", "),"."))
 
 
-  plots <- purrr::map(city_names,function(c){
+  plots <- lapply(city_names,function(c){
     #print(c)
     l <- location %>% filter(name==c)
     g<-years %>%
-      purrr::map(function(y)map_plot_for_city(location=l,
+      lapply(function(y)map_plot_for_city(location=l,
                                               title=paste0(c,", ",y),
                                               radius=radius_km*1000,
                                               bks=bks,year=y,
@@ -901,3 +1033,5 @@ make_city_map <- function(city_name,s,buffer=30,ds=5,show_shares = FALSE){
     ggplot2::facet_wrap(~name)
 }
 
+#' @import stars
+#' @import dplyr
