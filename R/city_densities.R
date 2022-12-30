@@ -21,9 +21,12 @@ get_GHS2022A_for <- function(geo=NULL,
   resolution <- resolution[1]
   type <- type[1]
   if (is.null(base_path)) base_path <- tempdir()
-  ghs2022A_base <- file.path(base_path,"GHS","GHS2022A")
+  ghs2022A_base <- file.path(base_path,"GHS")
+  if (!dir.exists(ghs2022A_base)) dir.create(ghs2022A_base)
+  ghs2022A_base <- file.path(ghs2022A_base,"GHS2022A")
+  if (!dir.exists(ghs2022A_base)) dir.create(ghs2022A_base)
 
-  if (type=="BUILT_H_AGBH") {
+  if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
     years = "2018"
     paths <- paste0("GHS_",type,"_E",years,"_GLOBE_R2022A_54009_",resolution)
   } else   if (type=="SMOD") {
@@ -46,11 +49,11 @@ get_GHS2022A_for <- function(geo=NULL,
     local_path <- local_paths[index]
     path <- paths[index]
     if (!dir.exists(local_path) | length(dir(local_path))==0) {
-      if (!dir.exists(ghs2022A_base)) {
-        dir.create(ghs2022A_base)
+      if (!dir.exists(local_path)) {
+        dir.create(local_path)
       }
-      dir.create(local_path)
-      if (type %in% c("BUILT_S","BUIT_V")) {
+      #dir.create(local_path)
+      if (type %in% c("BUILT_S","BUILT_V")) {
         url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_",type,"_GLOBE_R2022A/",
                       "GHS_",type,"_GLOBE_R2022A","/",
                       path,"/",version,"/",
