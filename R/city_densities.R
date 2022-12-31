@@ -10,7 +10,7 @@
 #' @return stars object for ppulation data
 #' @export
 get_GHS2022A_for <- function(geo=NULL,
-                             type = c("BUILT_S","BUILT_V","POP","BUILT_H_AGBH","BUILT_H_ANBH"),
+                             type = c("BUILT_S","BUILT_V","BUILT-V_NRES","POP","BUILT_H_AGBH","BUILT_H_ANBH"),
                              resolution=c("100","1000"),
                              years=c("1975", "1980", "1985", "1990", "1995", "2000", "2005", "2010", "2015", "2020"),
                              timeout=10000,
@@ -53,7 +53,7 @@ get_GHS2022A_for <- function(geo=NULL,
         dir.create(local_path)
       }
       #dir.create(local_path)
-      if (type %in% c("BUILT_S","BUILT_V")) {
+      if (type %in% c("BUILT_S","BUILT_V","BUILT-V_NRES")) {
         url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_",type,"_GLOBE_R2022A/",
                       "GHS_",type,"_GLOBE_R2022A","/",
                       path,"/",version,"/",
@@ -141,7 +141,7 @@ get_GHS_for<-function(geo=NULL,resolution=c("250","1k"),
                       base_path=getOption("custom_data_path")){
   if (is.null(base_path)) base_path <- tempdir()
   buffer <- ifelse(resolution=="1k",500,125)
-  raster_path = paste0(base_path,"GHS/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.tif")
+  raster_path = file.path(base_path,"GHS",paste0("GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0/GHS_POP_GPW4",year,"_GLOBE_R2015A_54009_",resolution,"_v1_0.tif"))
   if (!file.exists(raster_path)) {
     temp=tempfile()
     to <- getOption("timeout")
@@ -481,7 +481,7 @@ map_plot_for_city <- function(location,title,radius=25000,smoothing=500,
   }
 
   g<-ggplot2::ggplot(contours %>% sf::st_intersection(small_mask)) +
-    ggplot2::geom_sf(data=water  %>% sf::st_intersection(small_mask),fill="lightblue",color=NA) +
+    ggplot2::geom_sf(data=water  %>% sf::st_intersection(small_mask) |> sf::st_collection_extract("POLYGON"),fill="lightblue",color=NA) +
     ggplot2::geom_sf(ggplot2::aes(fill=f,color=c,group=id),show.legend = "none") +
     ggplot2::geom_sf(data=mask,fill="white",color=NA) +
     ggplot2::scale_colour_identity() +
@@ -896,9 +896,10 @@ plot_density_facet <- function(cities,bks=c(4,10,25,50,100,200,500,1000),
                   heights = grid::unit.c(grid::unit(1, "npc") - lheight, lheight))
 
 
-  gridExtra::grid.arrange(g,density_plots, nrow=2,#bottom=textGrob(caption, gp=gpar(fontsize=6)),
+  gg<-gridExtra::grid.arrange(g,density_plots, nrow=2,#bottom=textGrob(caption, gp=gpar(fontsize=6)),
                top=grid::textGrob(paste0(location$name," population density, ",radius_km,"km radius"),
                                   gp=grid::gpar(fontsize=15,font=8)))
+  gg
 }
 
 #' Get population weighted data for cities and years
