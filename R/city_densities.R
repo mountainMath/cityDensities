@@ -126,6 +126,138 @@ get_GHS2022A_for <- function(geo=NULL,
 }
 
 
+#' Get GHS 2023A population and built data
+#' @param geo cut down to geography (will include data in buffer around geography)
+#' @param type type of the sercies
+#' @param resolution resolution
+#' @param years year for the data series
+#' @param timeout timeout for data download
+#' @param version version of the dataset
+#' @param layer optional layer
+#' @param base_path local path to cache GHSL data
+#' @return stars object for ppulation data
+#' @export
+get_GHS2023A_for <- function(geo=NULL,
+                             type = c("BUILT_S"),#,"BUILT_V","BUILT-V_NRES","POP","BUILT_H_AGBH","BUILT_H_ANBH"),
+                             resolution=c("100","1000"),
+                             years=c("1975", "1980", "1985", "1990", "1995", "2000", "2005", "2010", "2015", "2020"),
+                             timeout=10000,
+                             version="V1-0",
+                             layer=NULL,
+                             base_path=getOption("custom_data_path")){
+
+  resolution <- resolution[1]
+  type <- type[1]
+  if (is.null(base_path)) {
+    warning("No local cache path set, only storing data temporarily.")
+    base_path <- tempdir()
+  }
+  ghs2023A_base <- file.path(base_path,"GHS")
+  if (!dir.exists(ghs2023A_base)) dir.create(ghs2023A_base)
+  ghs2023A_base <- file.path(ghs2023A_base,"GHS2023A")
+  if (!dir.exists(ghs2023A_base)) dir.create(ghs2023A_base)
+
+  if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
+    years <- "2018"
+    paths <- paste0("GHS_",type,"_E",years,"_GLOBE_R2023A_54009_",resolution)
+  } else   if (type=="SMOD") {
+    paths <- paste0("GHS_SMOD_P",years,"_GLOBE_R2023A_54009_1000")
+  } else if (type=="FUA") {
+    paths <- "GHS_FUA_UCDB2015_GLOBE_R2019A_54009_1K"
+    years <- "2019"
+  } else if (type=="UCDB") {
+    paths <- "GHS_STAT_UCDB2015MT_GLOBE_R2019A"
+    years <- "2015"
+  } else {
+    paths <- paste0("GHS_",type,"_E",years,"_GLOBE_R2023A_54009_",resolution)
+  }
+
+  local_paths <- file.path(ghs2023A_base,paths)
+
+  if (!dir.exists(file.path(base_path,"GHS"))) dir.create(file.path(base_path,"GHS"))
+
+  for (index in seq(1:length(local_paths))) {
+    local_path <- local_paths[index]
+    path <- paths[index]
+    if (!dir.exists(local_path) | length(dir(local_path))==0) {
+      if (!dir.exists(local_path)) {
+        dir.create(local_path)
+      }
+      #dir.create(local_path)
+      if (type %in% c("BUILT_S","BUILT_V","BUILT-V_NRES")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/", #GHS_",type,"_GLOBE_R2023A/",
+                      "GHS_",type,"_GLOBE_R2023A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type=="POP") {
+        "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2023A/GHS_POP_E2030_GLOBE_R2023A_54009_100/V1-0/GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0.zip"
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/",#GHS_",type,"_GLOBE_R2023A/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2023A/",
+                      "GHS_",type,"_GLOBE_R2023A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
+        url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2023A/",
+                      "GHS_",type,"_GLOBE_R2023A","/",
+                      path,"/",version,"/",
+                      path,"_",gsub("-","_",version),".zip")
+      } else if (type=="SMOD"){
+        url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_SMOD_GLOBE_R2023A/GHS_SMOD_P2030_GLOBE_R2023A_54009_1000/V1-0/GHS_SMOD_P2030_GLOBE_R2023A_54009_1000_V1_0.zip"
+      } else if (type=="UCDB"){
+        url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL//GHS_STAT_UCDB2015MT_GLOBE_R2019A/V1-2/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.zip"
+      } else if (type=="FUA"){
+        url <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_FUA_UCDB2015_GLOBE_R2019A/V1-0/GHS_FUA_UCDB2015_GLOBE_R2019A_54009_1K_V1_0.zip"
+      } else {
+        stop("unkown type")
+      }
+      tmp=tempfile()
+      old_timeout=getOption("timeout")
+      options("timeout"=timeout)
+      utils::download.file(url,tmp,mode = "wb")
+      options("timeout"=old_timeout)
+      utils::unzip(tmp,exdir=local_path,unzip=getOption("unzip"))
+      unlink(tmp)
+    }
+  }
+  if (length(local_paths)==1) {
+    ll <- dir(local_paths,full.names = TRUE)
+    if(length(ll)==1 && dir.exists(ll)) local_paths <-ll
+  }
+  tif <- local_paths |> lapply(function(local_path)dir(local_path,"\\.tif$",full.names = TRUE)) |> unlist()
+  gpkg <- local_paths |> lapply(function(local_path)dir(local_path,"\\.gpkg$",full.names = TRUE)) |> unlist()
+  if (length(tif)>0) {
+    s <- stars::read_stars(tif)
+    nn=names(s)
+    new_names <- gsub("2022|54009|1000","",nn) %>%
+      stringr::str_extract("\\d{4}") |>
+      unlist()
+    s<-s |> setNames(paste0(type,"__",new_names))
+
+    if (!is.null(geo)) {
+      ss <- s |> sf::st_crop(geo %>% sf::st_transform(sf::st_crs(s))) |> stars::st_as_stars()
+    } else {
+      ss <- s
+    }
+    #wgs_poj4 <- "+proj=longlat +datum=WGS84 +no_defs"
+    #rr %>% projectRaster(crs=wgs_poj4)
+  } else if (length(gpkg)>0) {
+    if (length(gpkg)>1 &!is.null(layer)) {
+      gpkg <- gpkg[grepl(layer,gpkg)]
+    }
+
+    if (length(gpkg)>1) {
+      warning(paste0("Have several layers, selecting first one of ",paste0(basename(gpkg),collapse=", ")))
+      gpkg <- gpkg[1]
+    }
+    ss <- sf::read_sf(gpkg)
+  }
+  ss
+}
+
+
 
 #' Get GHS populatin data
 #' @param geo cut down to geography (will include data in buffer around geography)
