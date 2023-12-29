@@ -196,7 +196,7 @@ get_GHS2023A_for <- function(geo=NULL,
                       path,"_",gsub("-","_",version),".zip")
       } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
         url <- paste0("https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_H_GLOBE_R2023A/",
-                      "GHS_",type,"_GLOBE_R2023A","/",
+                      #"GHS_",type,"_GLOBE_R2023A","/",
                       path,"/",version,"/",
                       path,"_",gsub("-","_",version),".zip")
       } else if (type %in% c("BUILT_H_AGBH","BUILT_H_ANBH")) {
